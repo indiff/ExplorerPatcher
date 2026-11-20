@@ -22,13 +22,17 @@ int main(int argc, char** argv)
     sprintf_s(szEndPattern, MAX_PATH, "## ");
 
     FILE* f = NULL;
-    fopen_s(&f, "..\\..\\" FILE_NAME, "r");
+    fopen_s(&f, "..\\..\\..\\" FILE_NAME, "r");
     if (!f)
     {
-        fopen_s(&f, "..\\" FILE_NAME, "r");
+        fopen_s(&f, "..\\..\\" FILE_NAME, "r");
         if (!f)
         {
-            fopen_s(&f, "" FILE_NAME, "r");
+            fopen_s(&f, "..\\" FILE_NAME, "r");
+            if (!f)
+            {
+                fopen_s(&f, "" FILE_NAME, "r");
+            }
         }
     }
     if (f)
@@ -59,12 +63,13 @@ int main(int argc, char** argv)
             "Please consult the [README](https://github.com/valinet/ExplorerPatcher/blob/master/README.md) for more details.\n"
             "A detailed change log is available [here](https://github.com/valinet/ExplorerPatcher/blob/master/CHANGELOG.md).\n"
             "An archive containing all the files generated during the build process (including `dxgi.dll` and symbol files) is available [here](%s).\n\n"
-            "*This release has been published automatically from %s %s in branch [%s](https://github.com/valinet/ExplorerPatcher/tree/%s/).*",
-            argc == 4 ? argv[3] : "https://github.com/valinet/ExplorerPatcher/actions",
-            argc == 4 ? "commits up to and including" : "the latest commits",
-            argc == 4 ? argv[1] : "",
-            argc == 4 ? argv[2] : "master",
-            argc == 4 ? argv[2] : "master"
+            "*This release has been published automatically from %s %s in %s [%s](https://github.com/valinet/ExplorerPatcher/tree/%s/).*",
+            argc == 5 ? argv[4] : "https://github.com/valinet/ExplorerPatcher/actions",
+            argc == 5 ? "commits up to and including" : "the latest commits",
+            argc == 5 ? argv[1] : "",
+            argc == 5 ? argv[2] : "branch",
+            argc == 5 ? argv[3] : "master",
+            argc == 5 ? argv[3] : "master"
         );
         fclose(f);
     }

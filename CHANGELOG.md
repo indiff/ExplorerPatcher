@@ -2,6 +2,429 @@
 
 This document includes the same release notes as in the [Releases](https://github.com/valinet/ExplorerPatcher/releases) section on GitHub.
 
+## 26100.9711.71
+
+Tested on OS builds 22621.4317 x64, 22631.7652 x64, 26100.8037 ARM64, 26300.9711 x64, 26340.9767 x64, 26100.33650 x64, 28000.3231 x64, 28120.3302 x64, 29695.1001 x64, and 29698.1000 x64.
+
+##### 1
+
+* ep_taskbar now detects the `ITrayUI` binary interface compatibility before being activated, and gracefully reverts back to stock taskbar when it is not compatible. (b7377e5)
+* Fixed 10 (EP) taskbar crashlooping on 29634+ x64/ARM64. (#5128)
+* Fixed 10 (EP) taskbar crashing when entering fullscreen on 26220.9343+ and 26xxx.9550+ x64/ARM64. (#5191)
+* Fixed disabling Windows 11 Explorer context menus on builds with customizable menus enabled (ID 60813048). (f646262)
+* Fixed Google weather script runtime failures. Thanks @davids5! (#5198) (7283621)
+* Pattern scan keep-ups: (9435cf9, 9045e87)
+  * Fixed Windows 10 taskbar jump list positioning fix on 26100.9343+, 28000.3032+, and 29683+ x64. (#5205)
+  * Fixed Windows 10 Alt+Tab on 26100.9606+ x64 and 28000.2630+/29634+ ARM64.
+  * Fixed Windows 10 taskbar Win+X menu command execution on 28000.2630+/29634+ ARM64.
+  * Fixed classic Microsoft IME context menus on 28000.2630+/29634+ ARM64.
+  * Fixed Windows 10 Start menu open/close animations on 28000.3172+ x64 and 28000.2630+/29634+ ARM64.
+  * Fixed Windows 10 Start menu startup crashes on 28000.2630+ ARM64.
+  * Fixed Windows 10 Start menu tile layout engine restoration on 28000.2630+/29634+ ARM64.
+  * Fixed Windows 10 Start menu "Pin to Start" and "Unpin from Start" context menu commands on 28000.2630+/29634+ ARM64.
+  * Fixed Windows 10 Start menu context menu crash fix on 29671+ x64.
+  * Fixed Windows 10 battery flyout fix on 28000.2630+ x64/ARM64, 29570+ x64, and 29634+ ARM64.
+  * Fixed File Explorer address bar shrinking and dropdown/refresh button sizing on 26100.9343+, 28000.3142+, and 29591+ x64.
+  * Fixed incomplete address bar shrinking and up button sizing in File Explorer on 22000+ ARM64.
+  * Fixed disabling rounded window corners on 28000.2630+ and 29553+ x64/ARM64.
+* Fixed memory corruption when pinning/unpinning a tile via the reimplemented "Pin to Start" shell context menu handler. (ExplorerPatcher/ep_starttiledata@d8e0df6)
+* Fixed TrayThreadBSTA fix (initially introduced in 69.1) being applied to unrelated threads (c08a7d2).
+* Fixed buffer overrun when reading a VisiblePlaces registry value whose size is not a multiple of a GUID. (dded255)
+* More granular explorer.exe injection: only full-injects on explorer.exe processes that host the desktop and taskbar. (be4e412, 945fc1f)
+  * For example, `explorer.exe /embedding` when `explorer.exe` is not running is no longer full-injected.
+  * Helps reduce false repeated crash detection activations.
+* Localized "Settings and Uninstall" in Dutch. (valinet/ExplorerPatcher-L10N@f2bdf8e)
+
+##### 2
+
+* Fixed ep_taskbar's display safe area publisher crashing Explorer on builds 26220.9757/26340.9767/28220.9836/26340.9843 due to an under the hood change by Microsoft. (#5209)
+* Fixed ep_taskbar's system tray crashing Explorer when attempting to show the tooltip of invalid tray icons.
+* Fixed Explorer crashing when opening a network's web sign-in page with the Windows 10 taskbar. (e1a0450) (#5235)
+* Fixed Explorer exiting unexpectedly while reading symbols when the user-folder path contains non-ASCII characters. Thanks @HosisoraLing! (valinet/libvalinet@797404f) (#2186)
+* Fixed disabling Windows 11 context menus in Explorer's navigation pane on 22000, 22621 builds before 22621.4974, 22631 builds before 22631.4974, and 26100 builds before 26100.3323 (x64/ARM64). (2e7f744)
+* Fixed Windows 10 Start menu closing animations not activating on some systems. (79d4c2f) (#5229)
+* Pattern scan keep-ups:
+  * Fixed Windows 10 Start menu alignment with top or side taskbars on ARM64 builds with movable taskbar code but with that feature disabled, such as 28000.3231. (e45df36) (#5240)
+  * Fixed Windows 10 taskbar Win+X power commands on 26220.9757+ and 26340.9767+ ARM64. (98f4497)
+  * Fixed Explorer address bar shrinking causing crashes on 29695+ x64. (98f4497)
+  * Fixed Explorer and taskbar menu skinning/unskinning on 28000.2630+ and 29634+ ARM64. (98f4497)
+
+## 26100.8457.70
+
+Tested on OS builds 22621.4317 x64, 22631.7079 x64, 26100.6899 ARM64, 26200.8457 x64, 26300.8493 x64, 26300.8758 x64, 28000.2269 ARM64, and 29617.1000 x64.
+
+##### 1
+
+* **🚨 Important: Fixed 10 taskbar and 10 Start menu crashing on 26xxx.8474+ and 28xxx.2298+.** (#4957)
+  * Due to 10 Start menu's tile layout engine being removed from `StartTileData.dll`, the 10 Start menu option has been temporarily hidden. (bf36cde, 8a5b8ba)
+  * *The 10 Start menu option has been made available again in version 70.2.*
+* **Highlight:** Fixed Windows 10 battery flyout crashing on 25951+. (659c2d0)
+  * As a side effect, the network flyout buttons had to be reverted to pre-24H2. Fixes #4691.
+* Changes to "Primary taskbar location on screen" in EP properties now reflect immediately. (6c9b41d)
+* Windows 11 taskbar autohide is no longer modified on Explorer boot. (e6becc9)
+* "Open Start in All apps by default" is now hidden when the new 11 Start menu is enabled. (#4648) (d8f1d1c)
+* Windows 10 Start menu on 21996-22000.51 now no longer crashes. (39ac219)
+* Fixed regedit.exe crashing when switching to thumbnail view in the import/export registry file dialog. (#3940) (80be85d)
+* Updated pattern matching code to support recent builds especially with 26H1 ARM64. (677fd9f, e641e0a, e77123a, 3c8e79f, 854770b, 04dd52b, ce22476, baf0fdb, b532116, c0adee2, eefa0bf, 420e112, 3be4f3f, 1bf0d81, 47d7481, 31d2c23, bdf95c3, fe8cc2b, 1be3c79)
+  * Improved efficiency on ARM64.
+* Added Greek translations. Thanks @KonVetsos!
+
+**ep_taskbar:**
+* Now supports all 43 Windows 11 languages.
+* Fixed reimplementation mistakes in system tray and some other places.
+* [For mod developers] Changed ep_taskbar's DLL names from numbers to the codename of the first major release a single variant supports. (cc36e34)
+* [For mod developers] TrayUI no longer inherits `Microsoft::WRL::RuntimeClass`; vtables are now stable on builds with multiple `ITrayUI` revisions like `ep_taskbar.ge.dll` (formerly `ep_taskbar.5.dll`).
+
+##### 2
+
+* Introduced a reimplemented 10 Start menu tile layout engine that was removed in 26xxx.8474. (688514f)
+  * *A full restoration has been introduced in version 70.4*.
+* Added an executable name blacklist to prevent shell extension from loading in certain applications. (#4819) (991b8ca)
+* Updated 10 Start menu animation patterns for 28xxx.2149+ ARM64. (c480fc2)
+
+**ep_taskbar:**
+* Fixed a deadlock relating to base EP reporting taskbar position and the taskbar reporting search/task view button location and size both to `WindowsUdk.ShellCommon.dll` during taskbar initialization.
+
+##### 3
+
+* Start10: Mitigated a new breakage related to removal of tablet mode code currently being rolled out on 25H2 Experimental builds 8553, 8687, 8697, and beyond. Thanks @AllieTheFox! (94cc68e)
+* Start10: Pinned tiles are no longer reset after 5 consecutive crashes. Thanks @AllieTheFox! (cc85aaf)
+* GUI: Fixed the wording of some strings. Thanks @Sefinek! (626ebf2)
+
+##### 4
+
+* Fixed 10 (EP) taskbar crashing on 28xxx.2298+ (26H1), x64 only. ARM64 is not affected. (#5059, #5063)
+* Restored 10 Start tile pinning behavior on 26xxx.8474+ and 28xxx.2298+. (96839ff, 0ecde00)
+* Fixed Explorer Pin to Start/Unpin from Start context menu action behavior when 10 Start is used on 226xx.3420+. (96839ff, 0ecde00)
+* Switching between 10 and 11 Start without restarting Explorer no longer results in broken open/close animation. (f022f50, 59a6a42)
+* Fixed properties dialog crash with [`hide-titlebar-elements`](https://windhawk.net/mods/hide-titlebar-elements) Windhawk mod. Thanks @ypx13 for the report and @AllieTheFox for the work! (0fad899)
+* Fixed Explorer crashlooping with [`file-explorer-content-animation`](https://windhawk.net/mods/file-explorer-content-animation) Windhawk mod. (#5098, 85e3d3a)
+* Fixed Simple Window Switcher not showing up when 11 taskbar is used. (#4982, 91bbc0e)
+
+## 26100.4946.69
+
+Tested on OS builds 26100.4946, 26100.5074, 26200.5751, and 26220.6682.
+
+##### 1
+
+* ep_weather: Fixed "Unable to load weather information" due to changes in Google's side. Thanks @davids5 for the fix! (#1334, #4351) (c3c83ff)
+* Start11: Fixed hiding of Recommended Section on recent builds of 24H2. Thanks @m-wigley for the fix! (#4476) (9106226)
+* GUI: File Explorer > Title bar is now available again on >= 22H2. Thanks @SandTechStuff! (583fa53)
+* Reduced the occurrences of the Windows 11 bug in Explorer windows where `WM_SETTINGCHANGE` would scroll the folder items list to the top. (fa19402b)
+* Changed hooking library to SlimDetours. (ff30457)
+  * On ARM64, fixes incompatibilities with certain Windhawk mods that hook `CreateWindowExW` such as [Taskbar Volume Control](https://windhawk.net/mods/taskbar-volume-control).
+  * On ARM64, fixes a very slim chance bug where hooked functions would cause a crash when called until a reboot.
+* ep_taskbar: Now statically links to private functions it uses. (ab99f26)
+* Taskbar10: Fixed folder toolbar menus and Toolbars > New toolbar not working on builds with `TrayThreadBSTA` (54481602) feature flag turned on, such as 26100.5074+. (#4542) (1bbe207)
+* GUI: Windows 8 Network flyout is now no longer an option on builds >= 25346 as van.dll was removed. Thanks @m-wigley for the fix! (#4478) (72c6983)
+* On Windows 11 22H2+, Windows 10 (ExplorerPatcher) taskbar a.k.a. ep_taskbar is now used by default. (ad2fa72)
+
+##### 2
+
+* Fixed weather button not having an icon. (#4545) (6959c69)
+  * You may need to perform "Clear weather widget local data" in EP properties > Weather.
+
+##### 3
+
+* File Explorer: Fixed "Shrink address bar height" resulting in broken graphics on recent 24H2 builds. (#4552) (6d946bd)
+* Start10: Fixed open/close animation patching on x64 27938+ and ARM64 27881+. (201a7e5, 79f8dd3, f873888, 465117e, 4434d10)
+* Start10: Fixed Windows 10 Start menu refusing to open when the new Windows 11 Start menu feature flag(s) are enabled. (#4523) (afd109f)
+* Fixed Windows 10 Alt+Tab and Windows 10 taskbar Win+X functionality on ARM64 226x1 and 27686+. (18dfcd0)
+
+##### 4
+
+* File Explorer: Corrected shrunk address bar toolbar button size when Servicing_CFDNavButtonsTheming (NI: 56845961, GE: 52061322) is enabled. (#4552) (9e91030)
+
+##### 5
+
+* Start10: Fixed Windows 10 Start menu not opening on 22H2/23H2 ARM64. (c08b0a6)
+
+##### 6
+
+* File Explorer: XAML folder views are now disabled when Windows 11 Command Bar is not used. (80414f5)
+  * This fixes crashes when navigating away and returning to Home/Gallery on 22H2/23H2 (#3447), and when opening Home on 26xxx.7015+.
+* File Explorer: Fixed Alt+D not working on builds with modern (XAML) navigation bar in File Explorer. (#2847) (a80d9dc)
+* File Explorer: Mitigated breakages on builds with tabs in File Explorer: (75178ec, df7d604)
+  * Fixed menu bar behavior when Windows 7 Command Bar is used. Pressing Alt will now summon the menu bar immediately like it used to. (#2676)
+  * Fixed window position and size saving when Windows 10 Ribbon is used. (#2243)
+* Taskbar10: These settings now take effect on ep_taskbar: (#4097) (48e1de3)
+  * Pinned items act as quick launch (don't group with active apps)
+  * When the taskbar shows button labels, remove the extra gap around pinned items
+
+## 22631.5335.68
+
+Tested on OS builds 22621.3296, 22631.5189, 22631.5335, 26100.3476, 26100.4061, and 26100.4188.
+
+##### 1
+
+* Start10: Fixed Pin to Start on 226x1.4541+ and 261xx.2454+. (#3984) (4ef3667, 123ea8b)
+* sws: Added support for 24H2. (#3765)
+* ep_dwm: Added support for 24H2. (#3555)
+* `ep_dwm.exe` has been renamed to `ep_dwm_svc.exe` to get around 24H2 upgrade blocks. (115b462)
+* ep_dwm: Now always unregistered on uninstallation, regardless of whether it was running during the uninstallation or not. (858b634)
+* Setup: The failure message now displays the associated code line number that failed, to assist in troubleshooting. (c64a17e)
+* Taskbar10: Fixed disabling immersive menus on ARM64. (8b4d8db)
+* Taskbar10: Fixed Win+X menu still having Windows Terminal entries when Windows Terminal is not installed, that crashes Explorer when selected. (1b20cbd, 207f669)
+  * For now, if you want to have PowerShell entries, Windows Terminal must be uninstalled.
+* Taskbar10: Fixed Win+X entry clicks doing nothing on 26xxx.5551+ ARM64.
+* GUI: Added dropdown indicators to dropdown entries. (9f71a5c)
+* GUI: The language names now include the country name. (3f11766)
+* Localization: Added Czech translations. (Thanks @9hb, @andrewz1986, and @Panzimy!)
+* Localization: Added Spanish (Spain) translations. (Thanks @AlejandroMartiGisbert!)
+* ep_taskbar: Added support for "Show desktop button: Hidden" setting. (#4020) (1be6658)
+* ep_taskbar: Fixed a bug that prevented shortcut global hotkeys from working on 24H2. (#3777, #4016)
+* ep_taskbar: Fixed a bug that prevented the taskbar from resizing properly after DPI changes. (#3796)
+* ep_taskbar: Added the following languages: German, French, Hungarian, Indonesian, Italian, Korean, Lithuanian, Dutch, Polish, Portuguese (Brazil), Romanian, Spanish (Spain), Turkish, Ukrainian, Chinese (Simplified).
+* ep_taskbar: Fixed a number of memory leaks and code/behavior inaccuracies.
+
+##### 2
+
+* ❗ **ep_taskbar: Fixed incompatibility with 26200.5603 (Dev), 26120.4151 (Beta), and 26100.4188 (Release Preview).** (#4321)
+* ep_taskbar: Now supports all Windows 10 versions supported by EP (17763/1809+). (aec8c70, 1edb989)
+
+## 22621.4317.67
+
+Tested on OS builds 22621.3296, 22631.4391, 26120.961, 26100.1150, and 26100.2161.
+
+##### 1
+
+* Taskbar10: Win+X now works again on 226xx.4317+. (cc9b6b3, #3837)
+* Start10: Fixed an issue where the resource loader failed when the drive letter of the boot drive is other than C:. Thanks @ittrgrey for pointing out! (fc25c25)
+* Start10: Fixed an issue where the Start menu crashes when summoning the context menu of an item that has jump list entries on builds 226xx.4391+ and 261xx.2130+. (4978024, #3842)
+* ep_taskbar: Fixed an issue where "Not responding" windows are not handled properly.
+* ep_taskbar: Flashing taskbar items are now animated.
+* ep_taskbar: Narrator now describes the "Show desktop" button.
+* ep_taskbar: `TrayUI` class is now exported.
+* Localization: Added translations for Portuguese (Brazil). Thanks @thiagojramos!
+
+## 22621.3880.66
+
+Tested on OS builds 19045.4598, 22621.3296, 22621.3810, 26120.961, and 26244.5000. (Note: 22621 and 22631 share the same OS files)
+
+##### 1
+
+* Taskbar10: Introduced a new taskbar implementation: Windows 10 (ExplorerPatcher). (146070d, 0b86e55)
+  * You can try this implementation out by changing the "Taskbar style" to "Windows 10 (ExplorerPatcher)".
+  * For now, this is **only available for builds 22621, 22631, and 22635.** Other builds will not have the option.
+  * Refer to [this wiki article](https://github.com/valinet/ExplorerPatcher/wiki/ExplorerPatcher's-taskbar-implementation) for more information including important ones.
+
+##### 2
+
+<details>
+
+* Taskbar10: Due to false positive antivirus detections, the new taskbar implementation is no longer bundled in the setup program. (48c2a75)
+  * If you want to use the new taskbar implementation, you can download the appropriate DLL for your system from the [Releases](https://github.com/ExplorerPatcher/ep_taskbar_releases/releases/latest) page of its releases repository, and then manually putting it in `C:\Program Files\ExplorerPatcher` without the architecture specifier.
+  * For example, for 226xx builds on x64-based systems, download `ep_taskbar.2.amd64.dll`, rename to `ep_taskbar.2.dll`, and lastly put it in `C:\Program Files\ExplorerPatcher`.
+
+</details>
+
+##### 3
+
+* Introduced support for ARM64 devices. (992b3a6, 2e4e4f5, b76c0e4, c9884b2, 57f63ad, 78788ec, 4799b4b, 5d0d218)
+  * These builds are only tested on and made to work with 24H2 ARM64 builds. Older ARM64 Windows versions than 24H2 may not work as expected.
+* Added an "Update now" button into update notifications for easier updating. (2b9c747, 8c16a9a)
+* Revised how files are packed in ep_setup for smaller size and easier maintenance. (30579b0, b253625, 04fd2b7, db54ce9, 126c024, c0201ff)
+* EP's taskbar implementation for 24H2 is now available in [its releases repository](https://github.com/ExplorerPatcher/ep_taskbar_releases/releases/latest), as `ep_taskbar.5.dll`. If you want to try this out, follow the steps explained above.
+
+##### 4
+
+With this update, ExplorerPatcher is now officially compatible and supported on Windows 11 24H2 🥳🎉
+
+* Start10: Now works again on 24H2 and 226xx.3930+. (755f101, 7e0f7eb, b473114)
+* Taskbar10: EP's taskbar DLLs are now included again in the setup files. (d9595fc)
+* Taskbar10: Network icon now shows again on 24H2. (7e0f7eb, b473114)
+* Start10: Fixed positioning when the taskbar is not placed at the bottom, on 24H2 and latest 22H2/23H2 builds. (de2532d, ea5881f)
+* Taskbar10: Fixed taskbar jump list flyout positioning when the taskbar is not placed at the bottom, on latest 22H2/23H2/24H2 builds. (39609e4)
+* Setup: Updated the code for dealing with locked files, this should reduce the chances of getting setup failures due to locked files. (7e0f7eb)
+* ep_taskbar: Fixed tray icons not being saved.
+* ep_taskbar: Removed the Copilot button on 22H2.
+
+##### 5
+
+* Taskbar10: Fixed jump list positioning patch on latest builds with `TaskbarJumplistOnHover` feature flag. (#3615) (351a020)
+* Taskbar11: Fixed Task Manager menu entry doing nothing on 24H2+. (#3021, #3556) (060066c)
+* Start10: Fixed symbols mechanism when custom `StartUI_.dll` is used. (0f38628)
+* Start10: Increased reliability of ARM64 patterns for restoring the animations and fixing positioning. (#3566) (2ea3894)
+* ep_taskbar: Fixed the task band not having a handle when the taskbar is unlocked.
+* ep_taskbar: Fixed scroll arrows in window list popups (`ExtendedUI`) having weird appearance and behavior.
+
+##### 6
+
+* Updates: Fixed a bug where empty UpdateURL registry values would break the updates system. (#3668) (ac14c75)
+* Setup: Cleaned some unneeded stuff in the setup binary. (9811810)
+* Misc: Restored exported functions for launching/restarting Explorer: `ZZLaunchExplorer`, `ZZLaunchExplorerDelayed`, and `ZZRestartExplorer`. (9811810)
+
+##### 7
+
+* Taskbar10: The registry key for the "Combine taskbar labels" setting is no longer redirected. (eb1f1ec, 2a6fb15)
+  * This means you can now configure this reliably both from EP's Properties dialog and the Settings app.
+  * If you are using EP with Windows 11 taskbar on Windows 11 builds before 226x1.2361 (builds without the Never Combine option on the Windows 11 taskbar), please make sure that this is set to "Always" to prevent issues.
+* ep_taskbar: Now supports EP Weather. (#3546)
+* ep_taskbar: Disabled app icon animations in the notification center button due to crashes when receiving a large number of notifications. (#3605)
+* ep_taskbar: Fixed an issue where fallback UWP app icons do not show up, such as [Okular](https://okular.kde.org)'s. (#3754)
+* ep_taskbar: Fixed an issue where the primary taskbar's monitor location is not remembered. (#3719)
+* ep_taskbar: Implemented Win+X hotkey. (#3671)
+* ep_taskbar: Initial support for [Windhawk](https://windhawk.net) mods. The following classes are now exported: `ClockButton`, `CTaskListThumbnailWnd`, `CTaskBand`, `CTaskBand::CLauncherTask`, `CTaskBtnGroup`, `CWindowTaskItem`, `CImmersiveTaskItem`, `CTaskGroup`, `TaskItemFilter`, `CTaskListWnd`, and `CTaskThumbnail`. (#3769)
+  * Check [this list](https://github.com/valinet/ExplorerPatcher/wiki/ExplorerPatcher's-taskbar-implementation#windhawk-mods-support) for compatibility info.
+  * The mods themselves need to be manually updated to support ep_taskbar. Please contact the respective mod authors for this.
+
+## 22621.3527.65
+
+Tested on OS builds 22621.3296, 22621.3447, 22621.3527, 22635.3566, 26058.1000, 26120.461, and 26200.5001. (Note: 22621 and 22631 share the same OS files)
+
+##### 1
+
+* Taskbar10: The Windows 10 taskbar option is now no longer available on 26002+. (#3053, e57a6b0)
+  * This is to comply with Microsoft's removal of the stock Windows 10 taskbar in `explorer.exe` of said builds.
+* Start10: Fixed Pin to Start on 226xx.3420+ (22H2, 23H2) and 25169+ (24H2). (232fe6b)
+* Start10: Reverted the menu closing delay fix when EP is injected only into `StartMenuExperienceHost.exe` for now. (e59c34c)
+
+##### 2
+
+* Start10: Fixed a bug where the recently introduced "account suggestions" prevents the user tile menu from opening on later 22H2/23H2 builds and 24H2. (d11445a)
+
+##### 3
+
+* All: Updated some patterns to work with 22635.3430+ (Beta) and recent 24H2 builds. (6d22947)
+  * This should fix the Windows 10 start menu crashing and Win+X not working on both aforementioned builds when symbols are not yet downloaded.
+  
+##### 4
+
+* Updates: Support for `ep_make`, a new script which builds ExplorerPatcher locally on your computer. Read more [here](https://github.com/valinet/ep_make). (80592f6)
+* GUI: Reorganized "About" and "Uninstall" sections. (4794713)
+* ep_weather: Fixed alignment.
+
+##### 5
+
+* Weather: Layout fixes. (57b44d2, 2112a18)
+
+## 22621.3296.64
+
+Tested on OS builds 22000.2538, 22621.1992, 22621.3155, 22621.3235, 22621.3296, 25951.1000, and 26058.1000.
+
+##### 1
+
+* Taskbar10: Fixed a bug where SCOOBE would repeatedly crash Explorer when Language Switcher is set to anything other than Windows 10 (the default). (fe7f800, 5c35f58)
+* Taskbar10: Refined the method for aligning the Windows 11 Start menu and Search flyouts when using the Windows 10 taskbar on 22621.2792+. (8f84a96)
+  * This should fix related crashes during logon and screen resolution change on 26063+.
+* Taskbar10: Revised the method for restoring acrylic to the Windows 10 taskbar on 22621+. (5e7bad2)
+  * This should fix the taskbar being fully transparent on recent builds such as 22635.3066 and 22621/22631.3296 despite not having any other customization software.
+* ExplorerPatcher should now avoid further injection when the system is in safe mode. (95ea9e7)
+* Setup: Moved uninstallation prompt dialog existence check to the GUI. (0589a25)
+* Various changes to prepare for the alternate taskbar reimplementation that will be released in the future. (a0885c6, 0791bd7, fc61884, 623ecee)
+
+##### 2
+
+* Taskbar10: Revised the method for disabling DisableWin10Taskbar present on 26002+. (913b2d0)
+
+##### 3
+
+* Start10: Support for OS builds 226xx.3420+ and 24H2, including fixed animations (5e25663, c286ab5).
+* Start10: Prevent menu closing delay when patching standalone (without ExplorerPatcher injecting `explorer.exe`) (45bd735).
+
+## 22621.3007.63
+
+Tested on OS builds 22000.2538, 22621.1992, 22621.3007, 22621.3085, and 22621.3155.
+
+##### 1
+
+* **Fixed a bug where `explorer.exe` would crash repeatedly when the system is in OOBE.** (36ebe5a)
+  * ExplorerPatcher now no longer loads if it detects that the system is in OOBE or in credential reset.
+* Taskbar10: The Network and Battery flyouts on later 22621 builds onwards and Windows 10 now open instantly without issues. (97fd483)
+* Taskbar10: Allowed the use of search box (without highlights) on Windows 11. (0157ecc)
+  * **The behavior when the Start or Search menu is open is currently not the same as Windows 10, and we have no plans to fix this yet. Please do not make new Issues regarding this.**
+* Start10: Added proper handling when the Windows 10 start menu is not available (e.g. 24H2/Canary builds). (3c8809e)
+* Start10: Removed the original method for fixing Jump List (right click) views. (79b0f68)
+* File Explorer: The address bar shrinking is now more accurate with pixel-perfect height compared to Windows 7, 8.1, and 10 (without the modern search). (e0b97e2)
+* GUI: Added "Uninstall" section containing a button to launch the uninstaller. (0c5021b)
+* Setup: There should now be fewer .prev files, and uninstallation should be cleaner as well. (296c6a0)
+* Symbols: Added `explorer.exe` symbols for 22621+ and unified the method for Windows 10 Alt+Tab on 22000. (1f2e2c4)
+* Localization: Added translations for Lithuanian, Polish, Russian, and Turkish.
+
+##### 2
+
+* Taskbar10: Improved animation performance when centering and/or EP Weather is not enabled, also fixed search box positioning on small taskbar without centering. (22d9e3c)
+* Setup: Fixed a bug that placed `wincorlib.dll` on Windows 10 when it is not supposed to, causing the start menu to crash. (610ba7f)
+
+##### 3
+
+* Taskbar10: Fixed flyout positioning on Windows 11 26058+. (dfe340d)
+* Slightly improved performance when interacting with the taskbar, both new and old. (dfe340d)
+
+##### 4
+
+* Setup: Reverted the method for ending `explorer.exe` and its subprocesses. (fdc357b)
+
+## 22621.2861.62
+
+Tested on OS builds 22621.2715, 22621.2861, 22631.2787, 22631.2861, 22635.2915, and 23590.1000.
+
+##### 1
+
+* Taskbar10: Various *important* fixes: (ec68783)
+  * Revised the method for enabling the old taskbar due to a very rare issue where the old taskbar couldn't be enabled with the previous method. (#2499)
+  * Fixed crash on 25921+ due to the removal of pnidui.dll. (#2558)
+  * Fixed potential stability issues when using the new taskbar on 22621.2787+.
+* Taskbar10: Fixed white boxes on submenus when context menu skinning is disabled. (72f1458)
+* File Explorer: Fixed crashes when using Windows 7/10 control interface on OS builds 22635.2915+. (3a1b8b8)
+* Localization: Added translations for French, German, Hungarian, Korean, Romanian, and Ukrainian.
+  * The properties window has been made slightly wider to accomodate the newly added languages. (#2574)
+* Localization: Added a language switcher to the About section of Properties window. (7c3be29, a7a3d27)
+
+##### 2
+
+* Symbols: Fixed languages with longer strings such as French crashing Explorer when attempting to download symbols. (ce9f973)
+
+**Note:** Due to the breakages as well as frequent changes happening in Canary builds, we strongly do not recommend using ExplorerPatcher on Canary builds for now.
+
+## 22621.2506.60
+
+Tested on OS builds 22000.2416, 22000.2538, 22621.2361, 22621.2506, 22621.2715, 22631.2787, 23585.1001, and 23590.1000.
+
+#### Details
+
+##### 1
+
+* Taskbar10: Fixed Windows 11 Start menu and Search positioning on builds 22621.2787+ and 23545+ (Dev). (ac268b1, 7d0cdde)
+* File Explorer: Added option to disable the modern navigation bar of Moment 4. (2dc1340)
+* File Explorer: Restored "Apply Mica" functionality on OS builds 22621+. (f62c532)
+* Localization: Officially added translations for the following languages: Chinese (Simplified), Chinese (Traditional), Dutch, Indonesian, Japanese
+  * Thanks to [everyone involved](https://github.com/valinet/ExplorerPatcher-L10N#acknowledgements)!
+* GUI: Decoupled the Properties window into `ep_gui.dll` from the main DLL in order to reduce the main DLL size and to allow scalable localization. (f6f6d89, 639d7aa)
+  * `rundll32 C:\Windows\dxgi.dll,ZZGUI` will continue to work as before.
+
+#### ⚠️ Important notice for translators ⚠️
+
+In this update, most if not all user-facing parts of ExplorerPatcher have been made localizable.
+
+* The English texts have been put together into [here](https://github.com/valinet/ExplorerPatcher/tree/master/ep_gui/resources/lang) and [here](https://github.com/valinet/ExplorerPatcher/tree/master/ep_setup/resources/lang).
+* Non-English texts have been designed to be put into [this separate repository](https://github.com/valinet/ExplorerPatcher-L10N). Feel free to make a PR there if you want to contribute to translations.
+* Some texts have been updated to be more concise and accurate, so for existing translation fork maintainers, please double check the translations before making a PR to the said repository.
+* Also for translation fork maintainers, a large number of conflicts will happen if you decide to continue merging changes from the main repository.
+* Please let us know through Issues if there are still user-facing parts of ExplorerPatcher that are not localizable.
+
+We apologize for the additional work that this change might cause. We hope that this one-time change will make it easier for translators to localize ExplorerPatcher and also easier for both translators and users to keep ExplorerPatcher up to date.
+
+## 22621.2428.59
+
+Tested on OS builds 22000.2416, 22621.2428, 23555.1000, and 23560.1000.
+
+#### Details
+
+##### 1
+
+Note: After updating to this version, the symbols will be re-downloaded even if they have been downloaded before.
+
+* Taskbar10: Fixed Control Center and Toast Center positioning on build 25951 (Canary). (dca0b3a)
+* Taskbar10: Fixed start menu position when the taskbar is at the left or right side on Moment 4 builds. (a57471f)
+* Taskbar10: Fixed the Windows 10 taskbar background patch to not crash anymore on build 25951 (Canary). (b52bd79)
+* Taskbar10: Made classic theme taskbar fonts more accurate. Thanks @aubymori! (8fc53a1)
+* Start10: Fixed a bug where certain texts in the Windows 10 Start menu stayed in English. (655e62c, 5321766)
+* Start10: Properly fixed start menu showing/hiding along with its original animations on builds 22000.65+. (7e2f768)
+* GUI: Fixed a bug where "Remember last used section" doesn't remember the current page after being enabled. (11160c8)
+* Symbols: Reworked how symbols are managed so that symbols don't need to be successfully downloaded in succession. (8412bd6)
+* Setup: Fixed uninstallation of EP installations that have went through upgrades before the proper Pin to Start fix. (845d2b5, a7c87ce)
+
 ## 22621.2361.58
 
 Tested on OS builds 22000.2416, 22621.1, 22621.2134, 22621.2361, 22631.2338, and 23545.1000.

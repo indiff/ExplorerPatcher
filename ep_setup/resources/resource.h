@@ -1,0 +1,25 @@
+//{{NO_DEPENDENCIES}}
+// Microsoft Visual C++ generated include file.
+// Used by ep_setup.rc
+//
+#define IDR_EP_ZIP                      103
+
+#define IDS_SETUP_UNSUPPORTED_ARCH      301
+#define IDS_SETUP_UNINSTALL_PROMPT      302
+#define IDS_SETUP_INSTALL_LOGOFF        303
+#define IDS_SETUP_UNINSTALL_LOGOFF      304
+#define IDS_SETUP_UNINSTALL_RESTART     305
+#define IDS_SETUP_UNINSTALL_FINISH      306
+#define IDS_SETUP_FAILED                307
+
+
+// Next default values for new objects
+// 
+#ifdef APSTUDIO_INVOKED
+#ifndef APSTUDIO_READONLY_SYMBOLS
+#define _APS_NEXT_RESOURCE_VALUE        105
+#define _APS_NEXT_COMMAND_VALUE         40001
+#define _APS_NEXT_CONTROL_VALUE         1001
+#define _APS_NEXT_SYMED_VALUE           101
+#endif
+#endif

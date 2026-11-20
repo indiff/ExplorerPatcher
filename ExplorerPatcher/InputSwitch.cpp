@@ -1,0 +1,302 @@
+﻿#include "InputSwitch.h"
+
+#include <shellscalingapi.h>
+#include <wrl/implements.h>
+#include <wil/result_macros.h>
+
+#include "utility.h"
+
+#define TB_POS_NOWHERE 0
+#define TB_POS_BOTTOM 1
+#define TB_POS_TOP 2
+#define TB_POS_LEFT 3
+#define TB_POS_RIGHT 4
+extern "C" UINT GetTaskbarLocationAndSize(POINT ptCursor, RECT* rc);
+
+extern "C" INPUT_SWITCH_IDL_CLIENT_TYPE dwIMEStyle;
+extern "C" HRESULT CInputSwitchControl_ModifyAnchor(UINT dwNumberOfProfiles, RECT* lpRect);
+
+HRESULT CInputSwitchControl_ModifyAnchor(UINT dwNumberOfProfiles, RECT* lpRect)
+{
+    if (!dwIMEStyle) // impossible case (this is not called for the Windows 11 language switcher), but just in case
+    {
+        return S_FALSE;
+    }
+
+    HWND hWndTaskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
+
+    UINT dpiX = 96, dpiY = 96;
+    HRESULT hr = GetDpiForMonitor(
+        MonitorFromWindow(hWndTaskbar, MONITOR_DEFAULTTOPRIMARY),
+        MDT_DEFAULT,
+        &dpiX,
+        &dpiY
+    );
+    double dpix = dpiX / 96.0;
+    double dpiy = dpiY / 96.0;
+
+    //printf("RECT %d %d %d %d - %d %d\n", lpRect->left, lpRect->right, lpRect->top, lpRect->bottom, dwNumberOfProfiles, a3);
+
+    RECT rc;
+    GetWindowRect(hWndTaskbar, &rc);
+    POINT pt;
+    pt.x = rc.left;
+    pt.y = rc.top;
+    UINT tbPos = GetTaskbarLocationAndSize(pt, &rc);
+    if (tbPos == TB_POS_BOTTOM)
+    {
+    }
+    else if (tbPos == TB_POS_TOP)
+    {
+        if (dwIMEStyle == 1) // Windows 10 (with Language preferences link)
+        {
+            lpRect->top = rc.top + (rc.bottom - rc.top) + (UINT)(((double)dwNumberOfProfiles * (60.0 * dpiy)) + (5.0 * dpiy * 4.0) + (dpiy) + (48.0 * dpiy));
+        }
+        else if (dwIMEStyle == 2 || dwIMEStyle == 3 || dwIMEStyle == 4 || dwIMEStyle == 5) // LOGONUI, UAC, Windows 10, OOBE
+        {
+            lpRect->top = rc.top + (rc.bottom - rc.top) + (UINT)(((double)dwNumberOfProfiles * (60.0 * dpiy)) + (5.0 * dpiy * 2.0));
+        }
+    }
+    else if (tbPos == TB_POS_LEFT)
+    {
+        if (dwIMEStyle == 1 || dwIMEStyle == 2 || dwIMEStyle == 3 || dwIMEStyle == 4 || dwIMEStyle == 5)
+        {
+            lpRect->right = rc.left + (rc.right - rc.left) + (UINT)((double)(300.0 * dpix));
+            lpRect->top += (lpRect->bottom - lpRect->top);
+        }
+    }
+    if (tbPos == TB_POS_RIGHT)
+    {
+        if (dwIMEStyle == 1 || dwIMEStyle == 2 || dwIMEStyle == 3 || dwIMEStyle == 4 || dwIMEStyle == 5)
+        {
+            lpRect->right = lpRect->right - (rc.right - rc.left);
+            lpRect->top += (lpRect->bottom - lpRect->top);
+        }
+    }
+
+    if (dwIMEStyle == 4)
+    {
+        lpRect->right -= (UINT)((double)(300.0 * dpix)) - (lpRect->right - lpRect->left);
+    }
+
+    return S_OK;
+}
+
+class CInputSwitchControlProxy : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, IInputSwitchControl>
+{
+public:
+    CInputSwitchControlProxy()
+        : m_type((INPUT_SWITCH_IDL_CLIENT_TYPE)-1)
+    {
+    }
+
+    HRESULT RuntimeClassInitialize(IInputSwitchControl* original)
+    {
+        m_original = original;
+        return S_OK;
+    }
+
+    STDMETHODIMP Init(INPUT_SWITCH_IDL_CLIENT_TYPE type) override
+    {
+        m_type = type;
+        return m_original->Init(type == ISCT_IDL_DESKTOP && dwIMEStyle != ISCT_IDL_DESKTOP ? dwIMEStyle : type);
+    }
+
+    STDMETHODIMP ShowInputSwitch(const RECT* rect) override
+    {
+        RECT myRect = *rect;
+        if (m_type == ISCT_IDL_DESKTOP)
+        {
+            UINT dwNumberOfProfiles = 0;
+            BOOL bImePresent = FALSE;
+            m_original->GetProfileCount(&dwNumberOfProfiles, &bImePresent);
+            CInputSwitchControl_ModifyAnchor(dwNumberOfProfiles, &myRect);
+        }
+        return m_original->ShowInputSwitch(&myRect);
+    }
+
+    STDMETHODIMP SetCallback(IInputSwitchCallback* callback) override { return m_original->SetCallback(callback); }
+    STDMETHODIMP GetProfileCount(UINT* count, BOOL* bOutImePresent) override { return m_original->GetProfileCount(count, bOutImePresent); }
+    STDMETHODIMP GetCurrentProfile(INPUT_SWITCH_IDL_PROFILE_DATA* data) override { return m_original->GetCurrentProfile(data); }
+    STDMETHODIMP RegisterHotkeys() override { return m_original->RegisterHotkeys(); }
+    STDMETHODIMP ClickImeModeItem(INPUT_SWITCH_IDL_IME_CLICK_TYPE type, POINT point, const RECT* rect) override { return m_original->ClickImeModeItem(type, point, rect); }
+    STDMETHODIMP ForceHide() override { return m_original->ForceHide(); }
+    STDMETHODIMP ShowTouchKeyboardInputSwitch(const RECT* rect, INPUT_SWITCH_IDL_ALIGNMENT align, int a3, DWORD a4, INPUT_SWITCH_IDL_MODALITY a5) override { return m_original->ShowTouchKeyboardInputSwitch(rect, align, a3, a4, a5); }
+    STDMETHODIMP GetContextFlags(DWORD* flags) override { return m_original->GetContextFlags(flags); }
+    STDMETHODIMP SetContextOverrideMode(INPUT_SWITCH_IDL_CFOM mode) override { return m_original->SetContextOverrideMode(mode); }
+    STDMETHODIMP GetCurrentImeModeItem(INPUT_SWITCH_IDL_IME_MODE_ITEM_DATA* data) override { return m_original->GetCurrentImeModeItem(data); }
+    STDMETHODIMP ActivateInputProfile(const WCHAR* profile) override { return m_original->ActivateInputProfile(profile); }
+    STDMETHODIMP SetUserSid(const WCHAR* sid) override { return m_original->SetUserSid(sid); }
+
+private:
+    Microsoft::WRL::ComPtr<IInputSwitchControl> m_original;
+    INPUT_SWITCH_IDL_CLIENT_TYPE m_type;
+};
+
+HRESULT CInputSwitchControlProxy_CreateInstance(IInputSwitchControl* original, REFIID riid, void** ppvObject)
+{
+    Microsoft::WRL::ComPtr<CInputSwitchControlProxy> proxy;
+    RETURN_IF_FAILED(Microsoft::WRL::MakeAndInitialize<CInputSwitchControlProxy>(&proxy, original));
+    RETURN_HR(proxy.CopyTo(riid, ppvObject));
+}
+
+class CInputSwitchControlProxySV2 : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, IInputSwitchControlSV2>
+{
+public:
+    CInputSwitchControlProxySV2()
+        : m_type((INPUT_SWITCH_IDL_CLIENT_TYPE)-1)
+    {
+    }
+
+    HRESULT RuntimeClassInitialize(IInputSwitchControlSV2* original)
+    {
+        m_original = original;
+        return S_OK;
+    }
+
+    STDMETHODIMP Init(INPUT_SWITCH_IDL_CLIENT_TYPE type) override
+    {
+        m_type = type;
+        return m_original->Init(type == ISCT_IDL_DESKTOP && dwIMEStyle != ISCT_IDL_DESKTOP ? dwIMEStyle : type);
+    }
+
+    STDMETHODIMP ShowInputSwitch(const RECT* rect) override
+    {
+        RECT myRect = *rect;
+        if (m_type == ISCT_IDL_DESKTOP)
+        {
+            UINT dwNumberOfProfiles = 0;
+            BOOL bImePresent = FALSE;
+            m_original->GetProfileCount(&dwNumberOfProfiles, &bImePresent);
+            CInputSwitchControl_ModifyAnchor(dwNumberOfProfiles, &myRect);
+        }
+        return m_original->ShowInputSwitch(&myRect);
+    }
+
+    STDMETHODIMP SetCallback(IInputSwitchCallback* callback) override { return m_original->SetCallback(callback); }
+    STDMETHODIMP GetProfileCount(UINT* count, BOOL* bOutImePresent) override { return m_original->GetProfileCount(count, bOutImePresent); }
+    STDMETHODIMP GetCurrentProfile(INPUT_SWITCH_IDL_PROFILE_DATA* data) override { return m_original->GetCurrentProfile(data); }
+    STDMETHODIMP RegisterHotkeys() override { return m_original->RegisterHotkeys(); }
+    STDMETHODIMP ClickImeModeItem(INPUT_SWITCH_IDL_IME_CLICK_TYPE type, POINT point, const RECT* rect) override { return m_original->ClickImeModeItem(type, point, rect); }
+    STDMETHODIMP ClickImeModeItemWithAnchor(INPUT_SWITCH_IDL_IME_CLICK_TYPE type, IUnknown* anchor) override { return m_original->ClickImeModeItemWithAnchor(type, anchor); }
+    STDMETHODIMP ForceHide() override { return m_original->ForceHide(); }
+    STDMETHODIMP ShowTouchKeyboardInputSwitch(const RECT* rect, INPUT_SWITCH_IDL_ALIGNMENT align, int a3, DWORD a4, INPUT_SWITCH_IDL_MODALITY a5) override { return m_original->ShowTouchKeyboardInputSwitch(rect, align, a3, a4, a5); }
+    STDMETHODIMP GetContextFlags(DWORD* flags) override { return m_original->GetContextFlags(flags); }
+    STDMETHODIMP SetContextOverrideMode(INPUT_SWITCH_IDL_CFOM mode) override { return m_original->SetContextOverrideMode(mode); }
+    STDMETHODIMP GetCurrentImeModeItem(INPUT_SWITCH_IDL_IME_MODE_ITEM_DATA* data) override { return m_original->GetCurrentImeModeItem(data); }
+    STDMETHODIMP ActivateInputProfile(const WCHAR* profile) override { return m_original->ActivateInputProfile(profile); }
+    STDMETHODIMP SetUserSid(const WCHAR* sid) override { return m_original->SetUserSid(sid); }
+
+private:
+    Microsoft::WRL::ComPtr<IInputSwitchControlSV2> m_original;
+    INPUT_SWITCH_IDL_CLIENT_TYPE m_type;
+};
+
+HRESULT CInputSwitchControlProxySV2_CreateInstance(IInputSwitchControlSV2* original, REFIID riid, void** ppvObject)
+{
+    Microsoft::WRL::ComPtr<CInputSwitchControlProxySV2> proxy;
+    RETURN_IF_FAILED(Microsoft::WRL::MakeAndInitialize<CInputSwitchControlProxySV2>(&proxy, original));
+    RETURN_HR(proxy.CopyTo(riid, ppvObject));
+}
+
+BOOL PatchContextMenuOfNewMicrosoftIME(BOOL* bFound)
+{
+    // huge thanks to @Simplestas: https://github.com/valinet/ExplorerPatcher/issues/598
+    HMODULE hInputSwitch = nullptr;
+    if (!GetModuleHandleExW(0, L"InputSwitch.dll", &hInputSwitch))
+        return FALSE;
+
+    PBYTE pInputSwitchText;
+    DWORD cbInputSwitchText;
+    if (!TextSectionBeginAndSize(hInputSwitch, &pInputSwitchText, &cbInputSwitchText))
+        return FALSE;
+
+#if defined(_M_X64)
+    // 44 38 ?? ?? 74 ?? ?? 8B CE E8 ?? ?? ?? ?? 85 C0
+    //             ^^ Change jz into jmp
+    // Ref: CTsfHandler::_OnOopImeContextMenu()
+    PBYTE match = (PBYTE)FindPattern(
+        pInputSwitchText,
+        cbInputSwitchText,
+        "\x44\x38\x00\x00\x74\x00\x00\x8B\xCE\xE8\x00\x00\x00\x00\x85\xC0",
+        "xx??x??xxx????xx"
+    );
+    if (match)
+    {
+        DWORD dwOldProtect;
+        if (VirtualProtect(match + 4, 1, PAGE_EXECUTE_READWRITE, &dwOldProtect))
+        {
+            match[4] = 0xEB;
+            VirtualProtect(match + 4, 1, dwOldProtect, &dwOldProtect);
+            return TRUE;
+        }
+    }
+#elif defined(_M_ARM64)
+    DWORD newInsn = 0;
+
+    // A8 43 40 39 ?? ?? 00 34 E0 03 ?? AA
+    //             ^^^^^^^^^^^ Change CBZ to B
+    // Ref: CTsfHandler::_OnOopImeContextMenu()
+    PBYTE match = (PBYTE)FindPattern_4_(
+        pInputSwitchText,
+        cbInputSwitchText,
+        "\xA8\x43\x40\x39\x00\x00\x00\x34\xE0\x03\x00\xAA",
+        "xxxx??xxxx?x"
+    );
+    if (match)
+    {
+        match += 4;
+        newInsn = ARM64_CBZWToB(*(DWORD*)match);
+    }
+    else
+    {
+        // GetContextMenuResourceId() inlined
+        // MOV W19/W20, #15305
+        // W19: 0b01010010100_0011101111001001_10011 = 52877933 = 33 79 87 52
+        // W20: 0b01010010100_0011101111001001_10100 = 52877934 = 34 79 87 52
+        // P:   0b01010010100_0011101111001001_10??? = 52877930 = 30 79 87 52
+        // M:   0b11111111111_1111111111111111_11000 = FFFFFFF8 = F8 FF FF FF
+        // Ref: CTsfHandler::_OnOopImeContextMenu()
+        match = (PBYTE)FindPatternBitMask_4_(
+            pInputSwitchText,
+            cbInputSwitchText,
+            "\x30\x79\x87\x52",
+            "\xF8\xFF\xFF\xFF",
+            4
+        );
+        if (match)
+        {
+            match += 4; // Point to after the mov
+
+            // We might be a jmp, follow it if so
+            PBYTE pJmpTarget = (PBYTE)ARM64_FollowB((DWORD*)match);
+            if (pJmpTarget)
+            {
+                match = pJmpTarget;
+            }
+
+            if (*(DWORD*)match == 0x52800033)
+            {
+                newInsn = 0x52800013; // MOV W19, #0
+            }
+            else if (*(DWORD*)match == 0x52800034)
+            {
+                newInsn = 0x52800014; // MOV W20, #0
+            }
+        }
+    }
+
+    if (newInsn)
+    {
+        DWORD dwOldProtect;
+        if (VirtualProtect(match, 4, PAGE_EXECUTE_READWRITE, &dwOldProtect))
+        {
+            *(DWORD*)match = newInsn;
+            VirtualProtect(match, 4, dwOldProtect, &dwOldProtect);
+            return TRUE;
+        }
+    }
+#endif
+
+    return FALSE;
+}

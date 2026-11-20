@@ -1,0 +1,25 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <Condiguration Condition="'$(Condiguration)' == ''">Release</Condiguration>
+    </PropertyGroup>
+    <ItemGroup>
+        <SubprojectsToBuild Include="ep_starttiledata\ep_starttiledata.slnx" Condition="Exists('ep_starttiledata\ep_starttiledata.slnx')">
+            <Properties>Configuration=$(Condiguration);Platform=x64</Properties>
+        </SubprojectsToBuild>
+        <SubprojectsToBuild Include="ep_starttiledata\ep_starttiledata.slnx" Condition="Exists('ep_starttiledata\ep_starttiledata.slnx')">
+            <Properties>Configuration=$(Condiguration);Platform=ARM64</Properties>
+        </SubprojectsToBuild>
+
+        <BaseEPsToBuild Include="ExplorerPatcher.sln">
+            <Properties>Configuration=$(Condiguration);Platform=amd64</Properties>
+        </BaseEPsToBuild>
+        <BaseEPsToBuild Include="ExplorerPatcher.sln">
+            <Properties>Configuration=$(Condiguration);Platform=arm64;WithArm64XBinaries=true</Properties>
+        </BaseEPsToBuild>
+    </ItemGroup>
+    <Target Name="Build">
+        <MSBuild Projects="@(SubprojectsToBuild)" BuildInParallel="true" />
+        <MSBuild Projects="ExplorerPatcher.sln" Properties="Configuration=$(Condiguration);Platform=IA-32" />
+        <MSBuild Projects="@(BaseEPsToBuild)" BuildInParallel="true" />
+    </Target>
+</Project>

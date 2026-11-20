@@ -3,6 +3,8 @@
 #include "ep_weather_provider_google_script.h"
 #include "ep_weather_error_html.h"
 
+#include <stdio.h>
+
 RTL_OSVERSIONINFOW global_rovi;
 DWORD32 global_ubr;
 SYSTEMTIME stLastUpdate;
@@ -44,7 +46,7 @@ static void epw_Weather_SetTextScaleFactorFromRegistry(EPWeather* _this, HKEY hK
     }
     else if (hKey == HKEY_LOCAL_MACHINE)
     {
-        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Accessibility", 0, KEY_READ | KEY_WOW64_64KEY | KEY_WRITE, NULL, &_this->hKLMAccessibility))
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Accessibility", REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WOW64_64KEY | KEY_WRITE, &_this->hKLMAccessibility))
         {
             RegNotifyChangeKeyValue(_this->hKLMAccessibility, FALSE, REG_NOTIFY_CHANGE_LAST_SET, _this->hSignalOnAccessibilitySettingsChangedFromHKLM, TRUE);
         }
@@ -429,7 +431,7 @@ HRESULT STDMETHODCALLTYPE _ep_Weather_ReboundBrowser(EPWeather* _this, LONG64 dw
         DWORD dwTextScaleFactor = epw_Weather_GetTextScaleFactor(_this);
         DWORD dwZoomFactor = epw_Weather_GetZoomFactor(_this);
         bounds.left = 0 - MulDiv(MulDiv(MulDiv(181, dpi, 96), dwTextScaleFactor, 100), dwZoomFactor, 100);
-        bounds.top = 0 - MulDiv(MulDiv(MulDiv(178, dpi, 96), dwTextScaleFactor, 100), dwZoomFactor, 100);
+        bounds.top = 0 - MulDiv(MulDiv(MulDiv(152, dpi, 96), dwTextScaleFactor, 100), dwZoomFactor, 100);
         bounds.right = MulDiv(MulDiv(MulDiv((!InterlockedAdd64(&_this->dwTextDir, 0) ? 1333 : 705), dpi, 96), dwTextScaleFactor, 100), dwZoomFactor, 100);// 5560;
         bounds.bottom = MulDiv(MulDiv(MulDiv(600, dpi, 96), dwTextScaleFactor, 100), dwZoomFactor, 100);// 15600;
     }
@@ -1451,7 +1453,11 @@ DWORD WINAPI epw_Weather_MainThread(EPWeather* _this)
     GenericObjectWithThis* pCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler = 
         GenericObjectWithThis_MakeAndInitialize(&EPWeather_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl, _this, L"pCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler");
     if (!pCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler) goto cleanup;
+#if !defined(_M_ARM64EC)
     _this->hrLastError = CreateCoreWebView2EnvironmentWithOptions(NULL, wszWorkFolder, &EPWeather_ICoreWebView2EnvironmentOptions, pCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler);
+#else
+    _this->hrLastError = E_NOTIMPL;
+#endif
     pCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler->lpVtbl->Release(pCoreWebView2CreateCoreWebView2EnvironmentCompletedHandler);
     if (FAILED(_this->hrLastError)) goto cleanup;
 

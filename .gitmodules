@@ -1,15 +1,18 @@
 [submodule "libs/libvalinet"]
 	path = libs/libvalinet
 	url = https://github.com/valinet/libvalinet
-[submodule "libs/funchook"]
-	path = libs/funchook
-	url = https://github.com/kubo/funchook
-[submodule "libs/Detours"]
-	path = libs/Detours
-	url = https://github.com/microsoft/Detours
 [submodule "libs/sws"]
 	path = libs/sws
 	url = https://github.com/valinet/sws
+[submodule "libs/zlib"]
+	path = libs/zlib
+	url = https://github.com/madler/zlib
 [submodule "ep_dwm"]
 	path = ep_dwm
 	url = https://github.com/valinet/ep_dwm
+[submodule "ep_starttiledata"]
+	path = ep_starttiledata
+	url = https://github.com/ExplorerPatcher/ep_starttiledata
+[submodule "ExplorerPatcher-L10N"]
+	path = ExplorerPatcher-L10N
+	url = https://github.com/valinet/ExplorerPatcher-L10N

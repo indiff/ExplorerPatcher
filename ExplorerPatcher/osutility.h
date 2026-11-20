@@ -20,6 +20,10 @@
 #endif
 #define DWMWA_MICA_EFFFECT 1029
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern RTL_OSVERSIONINFOW global_rovi;
 extern DWORD32 global_ubr;
 
@@ -74,6 +78,12 @@ inline BOOL IsWindows11BuildHigherThan25158()
     return global_rovi.dwBuildNumber > 25158;
 }
 
+inline BOOL IsWindows11Build25346OrHigher()
+{
+    if (!global_rovi.dwMajorVersion) global_ubr = VnGetOSVersionAndUBR(&global_rovi);
+    return global_rovi.dwBuildNumber >= 25346;
+}
+
 inline BOOL IsWindows11Version22H2Build1413OrHigher()
 {
     if (!global_rovi.dwMajorVersion) global_ubr = VnGetOSVersionAndUBR(&global_rovi);
@@ -88,10 +98,8 @@ inline BOOL IsWindows11Version22H2Build2134OrHigher()
     return global_rovi.dwBuildNumber == 22621 && global_ubr >= 2134;
 }
 
-inline BOOL IsWindows11Version22H2Build2361OrHigher()
-{
-    if (!global_rovi.dwMajorVersion) global_ubr = VnGetOSVersionAndUBR(&global_rovi);
-    if (global_rovi.dwBuildNumber > 22621) return TRUE;
-    return global_rovi.dwBuildNumber == 22621 && global_ubr >= 2361;
+#ifdef __cplusplus
 }
+#endif
+
 #endif

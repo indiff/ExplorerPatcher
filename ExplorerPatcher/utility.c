@@ -1,130 +1,10 @@
 #include "utility.h"
 #include <Wininet.h>
 #pragma comment(lib, "Wininet.lib")
+#include "inc/rtlfeatureconfig.h"
 
 RTL_OSVERSIONINFOW global_rovi;
 DWORD32 global_ubr;
-
-#pragma region "Weird stuff"
-/***
-Let me explain the weird stuff. This was not documented here before so updating this was a hell of a task.
-
-Our target is in `CTray::Init()`. It constructs either the Windows 11 or the Windows 10 taskbar based on the result of
-`winrt::WindowsUdk::ApplicationModel::AppExtensions::XamlExtensions::IsExtensionAvailable()`. We have to make the last
-argument of that function be set to false, so that we'll get the Windows 10 taskbar. In order to make a patch that does
-not use patterns, we hook `RoGetActivationFactory` and return a dummy object with our own specially crafted vtable.
-
-So the calls are as follows:
-
-`CTray::Init()` calls `factory_cache_entry<XamlExtensions, IXamlExtensionsStatics>::call()` to get an interface to
-`XamlExtensions` (located in windowsudk.shellcommon.dll) through `IXamlExtensionsStatics`. First, the factory cache
-system tries to retrieve its activation factory. It calls `RoGetActivationFactory` with the `IID` of
-`IXamlExtensionsStatics`. Our hook makes that function return a dummy `IXamlExtensionsStatics` with our own vtable.
-Despite the name, it is an activation factory. (Ref: `explorer_RoGetActivationFactoryHook()` in dllmain.c)
-
-Then, the cache system checks if the factory implements `IAgileObject` by calling `QueryInterface(IID_IAgileObject)` of
-the factory. This will be used to determine if the factory should be cached or not. We intercept this call and do
-nothing to make the process easy, so the factory will never be cached. In reality, `XamlExtensions` does not implement
-`IAgileObject`.
-
-Then, the cache system calls the lambda that's passed into `factory_cache_entry<~>::call()` in order to retrieve an
-interface that can be used. The lambda that `CTray::Init()` passes into the system, retrieves an instance of
-`XamlExtensions` by calling `IXamlExtensionsStatics::Current()` of the factory using COM. Here, we intercept the call
-through our custom `IXamlExtensionsStatics` vtable and return a dummy `XamlExtensions` instance with our own vtable
-whose `QueryInterface()` with the IID of `IXamlExtensions2` returns a dummy `IXamlExtensions2` with our own vtable.
-
-On builds with the "Never combine" feature on the new taskbar, it uses `IXamlExtensionsStatics2::GetForCategory()`
-instead of `IXamlExtensionsStatics::Current()`.
-
-Now that `CTray::Init()` has an instance of `XamlExtensions`, it calls `IXamlExtensions2::IsExtensionAvailable()`.
-As the name says, if the extension (or Windows 11 taskbar) is available, `CTray::Init()` will continue to make the
-Windows 11 taskbar through `CTray::InitializeTrayUIComponent()`. Otherwise, it will make the Windows 10 taskbar through
-`TrayUI_CreateInstance()` that has been since ages.
-
-`CTray::Init()` gets that value through the `IXamlExtensions2` interface of the `XamlExtensions` instance. COM calls are
-made, which are `QueryInterface(IID_IXamlExtensions2)` and `IXamlExtensions2::IsExtensionAvailable()` itself. We
-intercept the former call through our custom vtable for our dummy `XamlExtensions` instance to return a dummy
-`IXamlExtensions2` with our own vtable too. Then, we intercept the latter call through our custom `IXamlExtensions2`
-vtable to have the last argument set to false, and now we have the good old taskbar.
-***/
-
-static ULONG STDMETHODCALLTYPE nimplAddRefRelease(IUnknown* This)
-{
-    return 1;
-}
-
-static HRESULT STDMETHODCALLTYPE nimplReturnHResultNotImpl(IUnknown* This)
-{
-    return E_NOTIMPL;
-}
-
-static HRESULT STDMETHODCALLTYPE WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics_QueryInterface(WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics* This, REFIID riid, void** ppvObject)
-{
-    // Should only be called with IID_IAgileObject
-    return E_NOTIMPL;
-}
-
-static HRESULT STDMETHODCALLTYPE WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics_Current(WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics* This, void** _instance_of_winrt_WindowsUdk_ApplicationModel_AppExtensions_XamlExtensions)
-{
-    *_instance_of_winrt_WindowsUdk_ApplicationModel_AppExtensions_XamlExtensions = &instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2;
-    return S_OK;
-}
-
-static HRESULT STDMETHODCALLTYPE WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics2_GetForCategory(WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics2* This, HSTRING a2, void** _instance_of_winrt_WindowsUdk_ApplicationModel_AppExtensions_XamlExtensions)
-{
-    *_instance_of_winrt_WindowsUdk_ApplicationModel_AppExtensions_XamlExtensions = &instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2;
-    return S_OK;
-}
-
-static HRESULT STDMETHODCALLTYPE WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2_QueryInterface(WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2* This, REFIID riid, void** ppvObject)
-{
-    if (IsEqualIID(riid, &IID_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2))
-    {
-        *ppvObject = &instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2;
-        return S_OK;
-    }
-    return E_NOTIMPL;
-}
-
-static HRESULT STDMETHODCALLTYPE WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2_IsExtensionAvailable(WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2* This, HSTRING a2, HSTRING a3, BYTE* a4)
-{
-    *a4 = 0;
-    return S_OK;
-}
-
-static const WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStaticsVtbl instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStaticsVtbl = {
-    .QueryInterface = WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics_QueryInterface,
-    .AddRef = nimplAddRefRelease,
-    .Release = nimplAddRefRelease,
-    .GetIids = nimplReturnHResultNotImpl,
-    .GetRuntimeClassName = nimplReturnHResultNotImpl,
-    .GetTrustLevel = nimplReturnHResultNotImpl,
-    .Current = WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics_Current
-};
-const WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics = { &instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStaticsVtbl };
-
-static const WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics2Vtbl instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics2Vtbl = {
-    .QueryInterface = WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics_QueryInterface,
-    .AddRef = nimplAddRefRelease,
-    .Release = nimplAddRefRelease,
-    .GetIids = nimplReturnHResultNotImpl,
-    .GetRuntimeClassName = nimplReturnHResultNotImpl,
-    .GetTrustLevel = nimplReturnHResultNotImpl,
-    .GetForCategory = WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics2_GetForCategory
-};
-const WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics2 instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics2 = { &instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensionsStatics2Vtbl };
-
-static const WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2Vtbl instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2Vtbl = {
-    .QueryInterface = WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2_QueryInterface,
-    .AddRef = nimplAddRefRelease,
-    .Release = nimplAddRefRelease,
-    .GetIids = nimplReturnHResultNotImpl,
-    .GetRuntimeClassName = nimplReturnHResultNotImpl,
-    .GetTrustLevel = nimplReturnHResultNotImpl,
-    .IsExtensionAvailable = WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2_IsExtensionAvailable
-};
-const WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2 instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2 = { &instanceof_WindowsUdk_ApplicationModel_AppExtensions_IXamlExtensions2Vtbl };
-#pragma endregion
 
 void printf_guid(GUID guid) 
 {
@@ -134,6 +14,7 @@ void printf_guid(GUID guid)
         guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
 }
 
+#ifdef _DEBUG
 LRESULT CALLBACK BalloonWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) 
 {
     if (msg == WM_CREATE)
@@ -163,7 +44,7 @@ LRESULT CALLBACK BalloonWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
     return 0;
 }
 
-__declspec(dllexport) CALLBACK ZZTestBalloon(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
+__declspec(dllexport) int CALLBACK ZZTestBalloon(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
 {
     TCHAR* lpwszCmdLine = calloc((strlen(lpszCmdLine) + 1), sizeof(TCHAR));
     if (!lpwszCmdLine) exit(0);
@@ -199,6 +80,8 @@ __declspec(dllexport) CALLBACK ZZTestBalloon(HWND hWnd, HINSTANCE hInstance, LPS
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    return 0;
 }
 
 const wchar_t TestToastXML[] =
@@ -212,7 +95,7 @@ L"		</binding>\r\n"
 L"	</visual>\r\n"
 L"	<audio src=\"ms-winsoundevent:Notification.Default\" loop=\"false\" silent=\"false\"/>\r\n"
 L"</toast>\r\n";
-__declspec(dllexport) CALLBACK ZZTestToast(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
+__declspec(dllexport) int CALLBACK ZZTestToast(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
 {
     TCHAR* lpwszCmdLine = calloc((strlen(lpszCmdLine) + 1), sizeof(TCHAR));
     if (!lpwszCmdLine) exit(0);
@@ -252,9 +135,12 @@ __declspec(dllexport) CALLBACK ZZTestToast(HWND hWnd, HINSTANCE hInstance, LPSTR
         free(buffer);
     }
     free(lpwszCmdLine);
+    return 0;
 }
+#endif
 
-__declspec(dllexport) CALLBACK ZZLaunchExplorer(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
+#ifndef EP_BUILD_SETUP
+__declspec(dllexport) int CALLBACK ZZLaunchExplorer(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
 {
     Sleep(100);
     TCHAR wszExplorerPath[MAX_PATH + 1];
@@ -283,19 +169,23 @@ __declspec(dllexport) CALLBACK ZZLaunchExplorer(HWND hWnd, HINSTANCE hInstance, 
         ),
         0
     );
+    return 0;
 }
 
-__declspec(dllexport) CALLBACK ZZLaunchExplorerDelayed(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
+__declspec(dllexport) int CALLBACK ZZLaunchExplorerDelayed(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
 {
     Sleep(2000);
     ZZLaunchExplorer(hWnd, hInstance, lpszCmdLine, nCmdShow);
+    return 0;
 }
 
-__declspec(dllexport) CALLBACK ZZRestartExplorer(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
+__declspec(dllexport) int CALLBACK ZZRestartExplorer(HWND hWnd, HINSTANCE hInstance, LPSTR lpszCmdLine, int nCmdShow)
 {
-    BeginExplorerRestart();
+    BeginExplorerRestart(NULL);
     FinishExplorerRestart();
+    return 0;
 }
+#endif
 
 void* ReadFromFile(wchar_t* wszFileName, DWORD* dwSize)
 {
@@ -453,45 +343,58 @@ int ComputeFileHash2(HMODULE hModule, LPCWSTR filename, LPSTR hash, DWORD dwHash
     DWORD dwRightMost = 0;
     QueryVersionInfo(hModule, VS_VERSION_INFO, &dwLeftMost, &dwSecondLeft, &dwSecondRight, &dwRightMost);
 
-    sprintf_s(hash, 33, "%d.%d.%d.%d.", dwLeftMost == 22621 ? 22622 : dwLeftMost, dwSecondLeft, dwSecondRight, dwRightMost);
+    sprintf_s(hash, 33, "%d.%d.%d.%d.", dwLeftMost, dwSecondLeft, dwSecondRight, dwRightMost);
 
     char real_hash[33];
     ComputeFileHash(filename, real_hash, 33);
     strncpy_s(hash + strlen(hash), dwHash - strlen(hash), real_hash, 32 - strlen(hash));
-    if (dwLeftMost == 22622) *(strchr(strchr(strchr(strchr(hash, '.') + 1, '.') + 1, '.') + 1, '.') + 1) = '!';
     hash[33] = 0;
 
     return ERROR_SUCCESS;
+}
+
+void GetHardcodedHash(LPCWSTR wszPath, LPSTR hash, DWORD dwHash)
+{
+    HANDLE hFile = CreateFileW(wszPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        return 1;
+    }
+
+    HANDLE hFileMapping = CreateFileMappingW(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (hFileMapping == 0)
+    {
+        CloseHandle(hFile);
+        return 2;
+    }
+
+    char* lpFileBase = MapViewOfFile(hFileMapping, FILE_MAP_READ, 0, 0, 0);
+    if (lpFileBase == 0)
+    {
+        CloseHandle(hFileMapping);
+        CloseHandle(hFile);
+        return 3;
+    }
+
+    memcpy_s(hash, MIN(32, dwHash), lpFileBase + DOSMODE_OFFSET, 32);
+
+    UnmapViewOfFile(lpFileBase);
+    CloseHandle(hFileMapping);
+    CloseHandle(hFile);
 }
 
 void LaunchPropertiesGUI(HMODULE hModule)
 {
     //CreateThread(0, 0, ZZGUI, 0, 0, 0);
     wchar_t wszPath[MAX_PATH * 2];
-    ZeroMemory(
-        wszPath,
-        (MAX_PATH * 2) * sizeof(wchar_t)
-    );
+    ZeroMemory(wszPath, ARRAYSIZE(wszPath));
     wszPath[0] = '\"';
-    GetSystemDirectoryW(
-        wszPath + 1,
-        MAX_PATH
-    );
-    wcscat_s(
-        wszPath,
-        MAX_PATH * 2,
-        L"\\rundll32.exe\" \""
-    );
-    GetModuleFileNameW(
-        hModule,
-        wszPath + wcslen(wszPath),
-        MAX_PATH
-    );
-    wcscat_s(
-        wszPath,
-        MAX_PATH * 2,
-        L"\",ZZGUI"
-    );
+    GetSystemDirectoryW(wszPath + 1, MAX_PATH);
+    wcscat_s(wszPath, ARRAYSIZE(wszPath), L"\\rundll32.exe\" \"");
+    SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszPath + wcslen(wszPath));
+    wcscat_s(wszPath, ARRAYSIZE(wszPath), _T(APP_RELATIVE_PATH) L"\\ep_gui.dll");
+    wcscat_s(wszPath, ARRAYSIZE(wszPath), L"\",ZZGUI");
+
     wprintf(L"Launching : %s\n", wszPath);
     STARTUPINFO si;
     ZeroMemory(&si, sizeof(STARTUPINFO));
@@ -723,15 +626,7 @@ LSTATUS RegisterDWMService(DWORD dwDesiredState, DWORD dwOverride)
     WCHAR wszRundll32[MAX_PATH];
     SHGetFolderPathW(NULL, SPECIAL_FOLDER, NULL, SHGFP_TYPE_CURRENT, wszRundll32);
     wcscat_s(wszRundll32, MAX_PATH, _T(APP_RELATIVE_PATH));
-    wcscat_s(wszRundll32, MAX_PATH, L"\\ep_dwm.exe");
-
-    WCHAR wszEP[MAX_PATH];
-    GetWindowsDirectoryW(wszEP, MAX_PATH);
-    wcscat_s(wszEP, MAX_PATH, L"\\dxgi.dll");
-
-    WCHAR wszTaskkill[MAX_PATH];
-    GetSystemDirectoryW(wszTaskkill, MAX_PATH);
-    wcscat_s(wszTaskkill, MAX_PATH, L"\\taskkill.exe");
+    wcscat_s(wszRundll32, MAX_PATH, L"\\ep_dwm_svc.exe");
 
     WCHAR wszArgumentsRegister[MAX_PATH * 10];
     swprintf_s(
@@ -772,34 +667,20 @@ LSTATUS RegisterDWMService(DWORD dwDesiredState, DWORD dwOverride)
         HANDLE h_exists = CreateEventW(NULL, FALSE, FALSE, _T(EP_DWM_EVENTNAME));
         if (h_exists)
         {
-            if (GetLastError() == ERROR_ALREADY_EXISTS)
-            {
-                bAreRoundedCornersDisabled = TRUE;
-            }
-            else
-            {
-                bAreRoundedCornersDisabled = FALSE;
-            }
+            bAreRoundedCornersDisabled = GetLastError() == ERROR_ALREADY_EXISTS;
             CloseHandle(h_exists);
         }
         else
         {
-            if (GetLastError() == ERROR_ACCESS_DENIED)
-            {
-                bAreRoundedCornersDisabled = TRUE;
-            }
-            else
-            {
-                bAreRoundedCornersDisabled = FALSE;
-            }
+            bAreRoundedCornersDisabled = GetLastError() == ERROR_ACCESS_DENIED;
         }
         if ((bAreRoundedCornersDisabled && dwDesiredState) || (!bAreRoundedCornersDisabled && !dwDesiredState))
         {
             return FALSE;
         }
     }
-    SHELLEXECUTEINFO ShExecInfo = { 0 };
-    ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+    SHELLEXECUTEINFOW ShExecInfo = { 0 };
+    ShExecInfo.cbSize = sizeof(ShExecInfo);
     ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
     ShExecInfo.hwnd = NULL;
     ShExecInfo.lpVerb = L"runas";
@@ -818,6 +699,7 @@ LSTATUS RegisterDWMService(DWORD dwDesiredState, DWORD dwOverride)
     return TRUE;
 }
 
+#ifndef EP_BUILD_SETUP
 char* StrReplaceAllA(const char* s, const char* oldW, const char* newW, int* dwNewSize)
 {
     char* result;
@@ -1239,6 +1121,7 @@ HRESULT InputBox(BOOL bPassword, HWND hWnd, LPCWSTR wszPrompt, LPCWSTR wszTitle,
 
     return hr;
 }
+#endif
 
 UINT PleaseWaitTimeout = 0;
 HHOOK PleaseWaitHook = NULL;
@@ -1429,8 +1312,7 @@ BOOL DownloadFile(LPCWSTR wszURL, DWORD dwSize, LPCWSTR wszPath)
             exe_buffer = calloc(dwSize, sizeof(char));
             if (exe_buffer)
             {
-                BOOL bRet = FALSE;
-                if (bRet = InternetReadFile(
+                if (InternetReadFile(
                     hConnect,
                     exe_buffer,
                     dwSize - 1,
@@ -1441,7 +1323,7 @@ BOOL DownloadFile(LPCWSTR wszURL, DWORD dwSize, LPCWSTR wszPath)
                     _wfopen_s(&f, wszPath, L"wb");
                     if (f)
                     {
-                        fwrite(exe_buffer, 1, dwRead, f);
+                        bOK = fwrite(exe_buffer, 1, dwRead, f) == dwRead;
                         fclose(f);
                     }
                 }
@@ -1663,3 +1545,321 @@ BOOL ExtractMonitorByIndex(HMONITOR hMonitor, HDC hDC, LPRECT lpRect, MonitorOve
     mod->cbIndex++;
     return TRUE;
 }
+
+HRESULT SHRegGetBOOLWithREGSAM(HKEY key, LPCWSTR subKey, LPCWSTR value, REGSAM regSam, BOOL* data)
+{
+    DWORD dwType = REG_NONE;
+    DWORD dwData;
+    DWORD cbData = 4;
+    LSTATUS lRes = RegGetValueW(
+        key,
+        subKey,
+        value,
+        ((regSam & 0x100) << 8) | RRF_RT_REG_DWORD | RRF_RT_REG_SZ | RRF_NOEXPAND,
+        &dwType,
+        &dwData,
+        &cbData
+    );
+    if (lRes != ERROR_SUCCESS)
+    {
+        if (lRes == ERROR_MORE_DATA)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        if (lRes > 0)
+            return HRESULT_FROM_WIN32(lRes);
+        return lRes;
+    }
+
+    if (dwType == REG_DWORD)
+    {
+        if (dwData > 1)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        *data = dwData == 1;
+    }
+    else
+    {
+        if (cbData != 4 || (WCHAR)dwData != L'0' && (WCHAR)dwData != L'1')
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        *data = (WCHAR)dwData == L'1';
+    }
+
+    return S_OK;
+}
+
+HRESULT SHRegGetDWORD(HKEY hkey, const WCHAR* pwszSubKey, const WCHAR* pwszValue, DWORD* pdwData)
+{
+    DWORD dwSize = sizeof(DWORD);
+    LSTATUS lr = RegGetValueW(hkey, pwszSubKey, pwszValue, RRF_RT_REG_DWORD, NULL, pdwData, &dwSize);
+    return HRESULT_FROM_WIN32(lr);
+}
+
+VS_FIXEDFILEINFO* GetModuleVersionInfo(HMODULE hModule, UINT* puPtrLen)
+{
+    void* pFixedFileInfo = NULL;
+    UINT uPtrLen = 0;
+
+    HRSRC hResource = FindResourceW(hModule, MAKEINTRESOURCEW(VS_VERSION_INFO), RT_VERSION);
+    if (hResource)
+    {
+        HGLOBAL hGlobal = LoadResource(hModule, hResource);
+        if (hGlobal)
+        {
+            void* pData = LockResource(hGlobal);
+            if (pData)
+            {
+                if (!VerQueryValueW(pData, L"\\", &pFixedFileInfo, &uPtrLen) || uPtrLen == 0)
+                {
+                    pFixedFileInfo = NULL;
+                    uPtrLen = 0;
+                }
+            }
+        }
+    }
+
+    if (puPtrLen)
+        *puPtrLen = uPtrLen;
+
+    return (VS_FIXEDFILEINFO*)pFixedFileInfo;
+}
+
+RTL_QUERY_FEATURE_CONFIGURATION* g_pfnRtlQueryFeatureConfiguration;
+
+BOOL IsOsFeatureEnabled(UINT featureId, BOOL bEnabledByDefault)
+{
+    BOOL result = bEnabledByDefault;
+
+    HMODULE h = GetModuleHandleW(L"ntdll.dll");
+    g_pfnRtlQueryFeatureConfiguration = (RTL_QUERY_FEATURE_CONFIGURATION*)GetProcAddress(h, "RtlQueryFeatureConfiguration");
+
+    RTL_FEATURE_CONFIGURATION featureConfiguration;
+    RTL_FEATURE_CHANGE_STAMP changeStamp;
+    NTSTATUS status = g_pfnRtlQueryFeatureConfiguration(featureId, RtlFeatureConfigurationRuntime, &changeStamp, &featureConfiguration);
+    if (status == STATUS_SUCCESS)
+    {
+        if (featureConfiguration.EnabledState == FeatureEnabledStateDisabled)
+        {
+            result = FALSE;
+        }
+        else if (featureConfiguration.EnabledState == FeatureEnabledStateEnabled)
+        {
+            result = TRUE;
+        }
+    }
+
+    return result;
+}
+
+BOOL IsRedesignedWin11StartMenu()
+{
+    static int s_bIsRedesignedWin11StartMenu; // UNDEFINED, TRUE, FALSE
+    if (s_bIsRedesignedWin11StartMenu == 0)
+    {
+        s_bIsRedesignedWin11StartMenu = 2;
+
+        if (IsWindows11())
+        {
+            HMODULE hStartDocked = GetModuleHandleW(L"StartDocked.dll");
+
+            BOOL bUnload = FALSE;
+            if (!hStartDocked)
+            {
+                wchar_t szPath[MAX_PATH];
+                GetWindowsDirectoryW(szPath, MAX_PATH);
+                wcscat_s(szPath, MAX_PATH, L"\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\StartDocked.dll");
+                hStartDocked = LoadLibraryExW(szPath, NULL, LOAD_LIBRARY_AS_DATAFILE);
+                bUnload = TRUE;
+            }
+
+            if (hStartDocked)
+            {
+                VS_FIXEDFILEINFO* pFileInfo = GetModuleVersionInfo(hStartDocked, NULL);
+
+                // WORD major = HIWORD(pFileInfo->dwFileVersionMS);
+                // WORD minor = LOWORD(pFileInfo->dwFileVersionMS);
+                WORD build = HIWORD(pFileInfo->dwFileVersionLS);
+                WORD ubr = LOWORD(pFileInfo->dwFileVersionLS);
+
+                if ((build == 22621 && ubr >= 3420)
+                   || (build == 26100 && ubr >= 1350)
+                   || (build >= 26241 && build < 27547)
+                   || build >= 27695)
+                {
+                    s_bIsRedesignedWin11StartMenu = IsOsFeatureEnabled(47205210, TRUE)
+                        && IsOsFeatureEnabled(49221331, TRUE)
+                        && IsOsFeatureEnabled(49402389, TRUE) ? 1 : 2;
+                }
+
+                if (bUnload)
+                {
+                    FreeLibrary(hStartDocked);
+                }
+            }
+        }
+    }
+    return s_bIsRedesignedWin11StartMenu == 1;
+}
+
+#ifdef WITH_MAIN_PATCHER
+// https://learn.microsoft.com/en-us/windows/uwp/communication/sharing-named-objects
+// https://learn.microsoft.com/en-us/windows/win32/api/securityappcontainer/nf-securityappcontainer-getappcontainernamedobjectpath#examples
+BOOL GetLogonSid(PSID* ppsid)
+{
+    BOOL bSuccess = FALSE;
+    HANDLE hToken = NULL;
+    DWORD dwLength = 0;
+    DWORD dwError = ERROR_SUCCESS;
+    PTOKEN_GROUPS ptg = NULL;
+    PSID pSid = NULL;
+
+    if (ppsid == NULL)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+    *ppsid = NULL;
+
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken))
+    {
+        dwError = GetLastError();
+        goto Cleanup;
+    }
+
+    if (GetTokenInformation(hToken, TokenLogonSid, NULL, 0, &dwLength))
+    {
+        dwError = ERROR_INVALID_DATA;
+        goto Cleanup;
+    }
+    dwError = GetLastError();
+    if (dwError != ERROR_INSUFFICIENT_BUFFER)
+        goto Cleanup;
+
+    ptg = (PTOKEN_GROUPS)malloc(dwLength);
+    if (ptg == NULL)
+    {
+        dwError = ERROR_NOT_ENOUGH_MEMORY;
+        goto Cleanup;
+    }
+
+    if (!GetTokenInformation(hToken, TokenLogonSid, ptg, dwLength, &dwLength))
+    {
+        dwError = GetLastError();
+        goto Cleanup;
+    }
+    if (ptg->GroupCount != 1)
+    {
+        dwError = ERROR_INVALID_DATA;
+        goto Cleanup;
+    }
+
+    dwLength = GetLengthSid(ptg->Groups[0].Sid);
+    pSid = (PSID)malloc(dwLength);
+    if (pSid == NULL)
+    {
+        dwError = ERROR_NOT_ENOUGH_MEMORY;
+        goto Cleanup;
+    }
+    if (!CopySid(dwLength, pSid, ptg->Groups[0].Sid))
+    {
+        dwError = GetLastError();
+        goto Cleanup;
+    }
+
+    *ppsid = pSid;
+    pSid = NULL;
+    bSuccess = TRUE;
+
+Cleanup:
+    free(pSid);
+    free(ptg);
+    if (hToken != NULL)
+        CloseHandle(hToken);
+    if (!bSuccess)
+        SetLastError(dwError);
+    return bSuccess;
+}
+
+// https://learn.microsoft.com/en-us/windows/uwp/communication/sharing-named-objects
+// https://learn.microsoft.com/en-us/windows/win32/api/securityappcontainer/nf-securityappcontainer-getappcontainernamedobjectpath#examples
+BOOL PrepareSecurityDescriptor(PSID pMainSid, DWORD dwMainPermissions, PSID pSecondarySid, DWORD dwSecondayPermissions, PSECURITY_DESCRIPTOR* ppSD)
+{
+    BOOL bSuccess = FALSE;
+    DWORD dwError = ERROR_SUCCESS;
+    DWORD dwLength = 0;
+    PACL pACL = NULL;
+    SECURITY_DESCRIPTOR absoluteSD;
+    PSECURITY_DESCRIPTOR pSD = NULL;
+    EXPLICIT_ACCESS ea[2];
+
+    if (ppSD == NULL)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+    *ppSD = NULL;
+    if (pMainSid == NULL || pSecondarySid == NULL)
+    {
+        dwError = ERROR_INVALID_PARAMETER;
+        goto Cleanup;
+    }
+
+    ZeroMemory(&ea, sizeof(ea));
+    ea[0].grfAccessPermissions = dwMainPermissions;
+    ea[0].grfAccessMode = SET_ACCESS;
+    ea[0].grfInheritance = NO_INHERITANCE;
+    ea[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea[0].Trustee.TrusteeType = TRUSTEE_IS_USER;
+    ea[0].Trustee.ptstrName = (LPTSTR)pMainSid;
+    ea[1].grfAccessPermissions = dwSecondayPermissions;
+    ea[1].grfAccessMode = SET_ACCESS;
+    ea[1].grfInheritance = NO_INHERITANCE;
+    ea[1].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    ea[1].Trustee.TrusteeType = TRUSTEE_IS_USER;
+    ea[1].Trustee.ptstrName = (LPTSTR)pSecondarySid;
+
+    dwError = SetEntriesInAclW(2, ea, NULL, &pACL);
+    if (dwError != ERROR_SUCCESS)
+        goto Cleanup;
+
+    if (!InitializeSecurityDescriptor(&absoluteSD, SECURITY_DESCRIPTOR_REVISION))
+    {
+        dwError = GetLastError();
+        goto Cleanup;
+    }
+    if (!SetSecurityDescriptorDacl(&absoluteSD, TRUE, pACL, FALSE))
+    {
+        dwError = GetLastError();
+        goto Cleanup;
+    }
+
+    // Copy the DACL into the returned allocation before releasing the temporary ACL.
+    if (MakeSelfRelativeSD(&absoluteSD, NULL, &dwLength))
+    {
+        dwError = ERROR_INVALID_DATA;
+        goto Cleanup;
+    }
+    dwError = GetLastError();
+    if (dwError != ERROR_INSUFFICIENT_BUFFER)
+        goto Cleanup;
+    pSD = (PSECURITY_DESCRIPTOR)malloc(dwLength);
+    if (pSD == NULL)
+    {
+        dwError = ERROR_NOT_ENOUGH_MEMORY;
+        goto Cleanup;
+    }
+    if (!MakeSelfRelativeSD(&absoluteSD, pSD, &dwLength))
+    {
+        dwError = GetLastError();
+        goto Cleanup;
+    }
+
+    *ppSD = pSD;
+    pSD = NULL;
+    bSuccess = TRUE;
+Cleanup:
+    if (pACL != NULL)
+        LocalFree(pACL);
+    free(pSD);
+    if (!bSuccess)
+        SetLastError(dwError);
+    return bSuccess;
+}
+#endif

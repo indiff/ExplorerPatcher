@@ -1,5 +1,17 @@
+#include <stdio.h>
 #include "symbols.h"
 
+const char* explorer_SN[EXPLORER_SB_CNT] = {
+    EXPLORER_SB_0,
+    EXPLORER_SB_1,
+    EXPLORER_SB_2,
+    EXPLORER_SB_3,
+    EXPLORER_SB_4,
+    EXPLORER_SB_5,
+};
+const char* explorer_SN_26244[1] = {
+    EXPLORER_SB_4,
+};
 const char* twinui_pcshell_SN[TWINUI_PCSHELL_SB_CNT] = {
     TWINUI_PCSHELL_SB_0,
     TWINUI_PCSHELL_SB_1,
@@ -8,63 +20,131 @@ const char* twinui_pcshell_SN[TWINUI_PCSHELL_SB_CNT] = {
     TWINUI_PCSHELL_SB_4,
     TWINUI_PCSHELL_SB_5,
     TWINUI_PCSHELL_SB_6,
-    TWINUI_PCSHELL_SB_7,
-    TWINUI_PCSHELL_SB_8
 };
 const char* startdocked_SN[STARTDOCKED_SB_CNT] = {
     STARTDOCKED_SB_0,
     STARTDOCKED_SB_1,
     STARTDOCKED_SB_2,
     STARTDOCKED_SB_3,
-    STARTDOCKED_SB_4
+    STARTDOCKED_SB_4,
 };
 const char* startui_SN[STARTUI_SB_CNT] = {
-    STARTUI_SB_0
+    STARTUI_SB_0,
 };
 
-const wchar_t DownloadSymbolsXML[] =
-L"<toast scenario=\"reminder\" "
-L"activationType=\"protocol\" launch=\"https://github.com/valinet/ExplorerPatcher\" duration=\"short\">\r\n"
-L"	<visual>\r\n"
-L"		<binding template=\"ToastGeneric\">\r\n"
-L"			<text><![CDATA[Unable to find symbols for OS build %s]]></text>\r\n"
-L"			<text><![CDATA[Downloading and applying symbol information, please wait...]]></text>\r\n"
-L"			<text placement=\"attribution\"><![CDATA[ExplorerPatcher]]></text>\r\n"
-L"		</binding>\r\n"
-L"	</visual>\r\n"
-L"	<audio src=\"ms-winsoundevent:Notification.Default\" loop=\"false\" silent=\"false\"/>\r\n"
-L"</toast>\r\n";
-
-const wchar_t DownloadOKXML[] =
-L"<toast scenario=\"reminder\" "
-L"activationType=\"protocol\" launch=\"https://github.com/valinet/ExplorerPatcher\" duration=\"long\">\r\n"
-L"	<visual>\r\n"
-L"		<binding template=\"ToastGeneric\">\r\n"
-L"			<text><![CDATA[Successfully downloaded symbols for OS build %s]]></text>\r\n"
-L"			<text><![CDATA[Please restart File Explorer to apply the changes and enable additional functionality.]]></text>\r\n"
-L"			<text placement=\"attribution\"><![CDATA[ExplorerPatcher]]></text>\r\n"
-L"		</binding>\r\n"
-L"	</visual>\r\n"
-L"	<audio src=\"ms-winsoundevent:Notification.Default\" loop=\"false\" silent=\"false\"/>\r\n"
-L"</toast>\r\n";
-
-const wchar_t InstallOK[] =
-L"<toast scenario=\"reminder\" "
-L"activationType=\"protocol\" launch=\"https://github.com/valinet/ExplorerPatcher\" duration=\"long\">\r\n"
-L"	<visual>\r\n"
-L"		<binding template=\"ToastGeneric\">\r\n"
-L"			<text><![CDATA[Installation succeeded!]]></text>\r\n"
-L"			<text><![CDATA[This notification will not show again until the next OS build update.]]></text>\r\n"
-L"			<text placement=\"attribution\"><![CDATA[ExplorerPatcher]]></text>\r\n"
-L"		</binding>\r\n"
-L"	</visual>\r\n"
-L"	<audio src=\"ms-winsoundevent:Notification.Default\" loop=\"false\" silent=\"false\"/>\r\n"
-L"</toast>\r\n";
+const wchar_t DownloadNotificationXML[] =
+    L"<toast scenario=\"reminder\" "
+    L"activationType=\"protocol\" launch=\"%s\" duration=\"%s\">\r\n"
+    L"	<visual>\r\n"
+    L"		<binding template=\"ToastGeneric\">\r\n"
+    L"			<text><![CDATA[%s]]></text>\r\n"
+    L"			<text><![CDATA[%s]]></text>\r\n"
+    L"			<text placement=\"attribution\"><![CDATA[ExplorerPatcher]]></text>\r\n"
+    L"		</binding>\r\n"
+    L"	</visual>\r\n"
+    L"	<audio src=\"ms-winsoundevent:Notification.Default\" loop=\"false\" silent=\"false\"/>\r\n"
+    L"</toast>\r\n";
 
 extern INT VnDownloadSymbols(HMODULE hModule, char* dllName, char* szLibPath, UINT sizeLibPath);
 extern INT VnGetSymbols(const char* pdb_file, DWORD* addresses, char** symbols, DWORD numOfSymbols);
 
-static BOOL ProcessTwinuiPcshellSymbols(const char* pszSettingsPath, DWORD* pOffsets)
+BOOL CheckVersion(HKEY hKey, DWORD dwVersion)
+{
+    DWORD dwSize = sizeof(DWORD);
+    DWORD dwStoredVersion = 0;
+    if (RegQueryValueExW(hKey, TEXT("Version"), 0, NULL, (LPBYTE)&dwStoredVersion, &dwSize) == ERROR_SUCCESS)
+    {
+        return dwStoredVersion == dwVersion;
+    }
+    return FALSE;
+}
+
+void SaveVersion(HKEY hKey, DWORD dwVersion)
+{
+    RegSetValueExW(hKey, TEXT("Version"), 0, REG_DWORD, (const BYTE*)&dwVersion, sizeof(DWORD));
+}
+
+static BOOL ProcessExplorerSymbols(char* pszSettingsPath, DWORD* pOffsets)
+{
+    HKEY hKey = NULL;
+    DWORD dwDisposition;
+    RegCreateKeyExW(
+        HKEY_CURRENT_USER,
+        TEXT(REGPATH) L"\\" TEXT(EXPLORER_SB_NAME),
+        0,
+        NULL,
+        REG_OPTION_NON_VOLATILE,
+        KEY_WRITE,
+        NULL,
+        &hKey,
+        &dwDisposition
+    );
+    if (!hKey || hKey == INVALID_HANDLE_VALUE)
+    {
+        printf("[Symbols] Unable to create registry key.\n");
+        return FALSE;
+    }
+
+    CHAR szHash[100];
+    WCHAR wszPath[MAX_PATH];
+
+    ZeroMemory(szHash, sizeof(szHash));
+    ZeroMemory(wszPath, sizeof(wszPath));
+
+    char explorer_sb_dll[MAX_PATH];
+    ZeroMemory(explorer_sb_dll, sizeof(explorer_sb_dll));
+    GetWindowsDirectoryA(explorer_sb_dll, MAX_PATH);
+    strcat_s(explorer_sb_dll, MAX_PATH, "\\" EXPLORER_SB_NAME ".exe");
+
+    GetWindowsDirectoryW(wszPath, MAX_PATH);
+    wcscat_s(wszPath, MAX_PATH, L"\\" _T(EXPLORER_SB_NAME) L".exe");
+    ComputeFileHash(wszPath, szHash, ARRAYSIZE(szHash));
+
+    printf("[Symbols] Downloading symbols for \"%s\" (\"%s\")...\n", explorer_sb_dll, szHash);
+    if (VnDownloadSymbols(
+        NULL,
+        explorer_sb_dll,
+        pszSettingsPath,
+        MAX_PATH
+    ))
+    {
+        printf("[Symbols] Symbols for \"%s\" are not available - unable to download.\n", explorer_sb_dll);
+        printf("[Symbols] Please refer to \"https://github.com/valinet/ExplorerPatcher/wiki/Symbols\" for more information.\n");
+        if (hKey) RegCloseKey(hKey);
+        return FALSE;
+    }
+
+    printf("[Symbols] Reading symbols...\n");
+    if (VnGetSymbols(pszSettingsPath, pOffsets, (char**)explorer_SN, ARRAYSIZE(explorer_SN)) != 0)
+    {
+        DWORD offsets26244[ARRAYSIZE(explorer_SN_26244)];
+        if (VnGetSymbols(pszSettingsPath, offsets26244, (char**)explorer_SN_26244, ARRAYSIZE(explorer_SN_26244)) == 0)
+        {
+            pOffsets[4] = offsets26244[0];
+        }
+        else
+        {
+            printf("[Symbols] Failure in reading symbols for \"%s\".\n", explorer_sb_dll);
+            if (hKey) RegCloseKey(hKey);
+            return FALSE;
+        }
+    }
+
+    RegSetValueExW(hKey, TEXT(EXPLORER_SB_0), 0, REG_DWORD, (const BYTE*)&pOffsets[0], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(EXPLORER_SB_1), 0, REG_DWORD, (const BYTE*)&pOffsets[1], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(EXPLORER_SB_2), 0, REG_DWORD, (const BYTE*)&pOffsets[2], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(EXPLORER_SB_3), 0, REG_DWORD, (const BYTE*)&pOffsets[3], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(EXPLORER_SB_4), 0, REG_DWORD, (const BYTE*)&pOffsets[4], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(EXPLORER_SB_5), 0, REG_DWORD, (const BYTE*)&pOffsets[5], sizeof(DWORD));
+
+    RegSetValueExA(hKey, "Hash", 0, REG_SZ, szHash, (DWORD)(strlen(szHash) + 1));
+    SaveVersion(hKey, EXPLORER_SB_VERSION);
+
+    if (hKey) RegCloseKey(hKey);
+    return TRUE;
+}
+
+static BOOL ProcessTwinuiPcshellSymbols(char* pszSettingsPath, DWORD* pOffsets)
 {
     HKEY hKey = NULL;
     DWORD dwDisposition;
@@ -117,83 +197,38 @@ static BOOL ProcessTwinuiPcshellSymbols(const char* pszSettingsPath, DWORD* pOff
     }
 
     printf("[Symbols] Reading symbols...\n");
-    if (!IsWindows11())
-    {
-        DWORD flOldProtect = 0;
-        if (VirtualProtect(twinui_pcshell_SN, sizeof(twinui_pcshell_SN), PAGE_EXECUTE_READWRITE, &flOldProtect))
-        {
-            twinui_pcshell_SN[1] = twinui_pcshell_SN[0];
-            VirtualProtect(twinui_pcshell_SN, sizeof(twinui_pcshell_SN), flOldProtect, &flOldProtect);
-        }
-    }
-    if (IsWindows11Version22H2OrHigher())
-    {
-        DWORD flOldProtect = 0;
-        if (VirtualProtect(twinui_pcshell_SN, sizeof(twinui_pcshell_SN), PAGE_EXECUTE_READWRITE, &flOldProtect))
-        {
-            twinui_pcshell_SN[7] = "CMultitaskingViewManager::_CreateXamlMTVHost";
-            twinui_pcshell_SN[TWINUI_PCSHELL_SB_CNT - 1] = "CMultitaskingViewManager::_CreateDCompMTVHost";
-            VirtualProtect(twinui_pcshell_SN, sizeof(twinui_pcshell_SN), flOldProtect, &flOldProtect);
-        }
-    }
     if (VnGetSymbols(
         pszSettingsPath,
         pOffsets,
-        twinui_pcshell_SN,
-        IsWindows11() ? TWINUI_PCSHELL_SB_CNT : 4
+        (char**)twinui_pcshell_SN,
+        IsWindows11() ? TWINUI_PCSHELL_SB_CNT : 3
     ))
     {
-        if (!IsWindows11())
-        {
-            printf("[Symbols] Failure in reading symbols for \"%s\".\n", twinui_pcshell_sb_dll);
-            if (hKey) RegCloseKey(hKey);
-            return FALSE;
-        }
-
-        //printf("[Symbols] Hooking Win+C is not available in this build.\n");
-        if (VnGetSymbols(
-            pszSettingsPath,
-            pOffsets,
-            twinui_pcshell_SN,
-            TWINUI_PCSHELL_SB_CNT - 1
-        ))
-        {
-            printf("[Symbols] Windows 10 window switcher style may not be available in this build.\n");
-            if (VnGetSymbols(
-                pszSettingsPath,
-                pOffsets,
-                twinui_pcshell_SN,
-                TWINUI_PCSHELL_SB_CNT - 2
-            ))
-            {
-                printf("[Symbols] Failure in reading symbols for \"%s\".\n", twinui_pcshell_sb_dll);
-                if (hKey) RegCloseKey(hKey);
-                return FALSE;
-            }
-        }
+        printf("[Symbols] Failure in reading symbols for \"%s\".\n", twinui_pcshell_sb_dll);
+        if (hKey) RegCloseKey(hKey);
+        return FALSE;
     }
 
     if (!IsWindows11())
     {
         pOffsets[1] = 0;
     }
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_0), 0, REG_DWORD, &pOffsets[0], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_1), 0, REG_DWORD, &pOffsets[1], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_2), 0, REG_DWORD, &pOffsets[2], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_3), 0, REG_DWORD, &pOffsets[3], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_4), 0, REG_DWORD, &pOffsets[4], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_5), 0, REG_DWORD, &pOffsets[5], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_6), 0, REG_DWORD, &pOffsets[6], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_7), 0, REG_DWORD, &pOffsets[7], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_8), 0, REG_DWORD, &pOffsets[8], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_0), 0, REG_DWORD, (const BYTE*)&pOffsets[0], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_1), 0, REG_DWORD, (const BYTE*)&pOffsets[1], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_2), 0, REG_DWORD, (const BYTE*)&pOffsets[2], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_3), 0, REG_DWORD, (const BYTE*)&pOffsets[3], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_4), 0, REG_DWORD, (const BYTE*)&pOffsets[4], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_5), 0, REG_DWORD, (const BYTE*)&pOffsets[5], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_6), 0, REG_DWORD, (const BYTE*)&pOffsets[6], sizeof(DWORD));
 
-    RegSetValueExA(hKey, "Hash", 0, REG_SZ, szHash, strlen(szHash) + 1);
+    RegSetValueExA(hKey, "Hash", 0, REG_SZ, szHash, (DWORD)(strlen(szHash) + 1));
+    SaveVersion(hKey, TWINUI_PCSHELL_SB_VERSION);
 
     if (hKey) RegCloseKey(hKey);
     return TRUE;
 }
 
-static BOOL ProcessStartDockedSymbols(const char* pszSettingsPath, DWORD* pOffsets)
+static BOOL ProcessStartDockedSymbols(char* pszSettingsPath, DWORD* pOffsets)
 {
     HKEY hKey = NULL;
     DWORD dwDisposition;
@@ -249,7 +284,7 @@ static BOOL ProcessStartDockedSymbols(const char* pszSettingsPath, DWORD* pOffse
     if (VnGetSymbols(
         pszSettingsPath,
         pOffsets,
-        startdocked_SN,
+        (char**)startdocked_SN,
         STARTDOCKED_SB_CNT
     ))
     {
@@ -258,19 +293,20 @@ static BOOL ProcessStartDockedSymbols(const char* pszSettingsPath, DWORD* pOffse
         return FALSE;
     }
 
-    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_0), 0, REG_DWORD, &pOffsets[0], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_1), 0, REG_DWORD, &pOffsets[1], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_2), 0, REG_DWORD, &pOffsets[2], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_3), 0, REG_DWORD, &pOffsets[3], sizeof(DWORD));
-    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_4), 0, REG_DWORD, &pOffsets[4], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_0), 0, REG_DWORD, (const BYTE*)&pOffsets[0], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_1), 0, REG_DWORD, (const BYTE*)&pOffsets[1], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_2), 0, REG_DWORD, (const BYTE*)&pOffsets[2], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_3), 0, REG_DWORD, (const BYTE*)&pOffsets[3], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(STARTDOCKED_SB_4), 0, REG_DWORD, (const BYTE*)&pOffsets[4], sizeof(DWORD));
 
-    RegSetValueExA(hKey, "Hash", 0, REG_SZ, szHash, strlen(szHash) + 1);
+    RegSetValueExA(hKey, "Hash", 0, REG_SZ, szHash, (DWORD)(strlen(szHash) + 1));
+    SaveVersion(hKey, STARTDOCKED_SB_VERSION);
 
     if (hKey) RegCloseKey(hKey);
     return TRUE;
 }
 
-static BOOL ProcessStartUISymbols(const char* pszSettingsPath, DWORD* pOffsets)
+static BOOL ProcessStartUISymbols(char* pszSettingsPath, DWORD* pOffsets)
 {
     HKEY hKey = NULL;
     DWORD dwDisposition;
@@ -291,21 +327,31 @@ static BOOL ProcessStartUISymbols(const char* pszSettingsPath, DWORD* pOffsets)
         return FALSE;
     }
 
-    CHAR szHash[100];
     WCHAR wszPath[MAX_PATH];
-
-    ZeroMemory(szHash, sizeof(szHash));
     ZeroMemory(wszPath, sizeof(wszPath));
+    GetWindowsDirectoryW(wszPath, MAX_PATH);
+    wcscat_s(wszPath, MAX_PATH, L"\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\" _T(STARTUI_SB_NAME) L".dll");
+
+    BOOL bCustomStartUI = FALSE;
+    if (!FileExistsW(wszPath))
+    {
+        GetWindowsDirectoryW(wszPath, MAX_PATH);
+        wcscat_s(wszPath, MAX_PATH, L"\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\StartUI_.dll");
+        if (!FileExistsW(wszPath))
+        {
+            return TRUE; // StartUI.dll or StartUI_.dll is not present in the current Windows installation, treat this as success
+        }
+        bCustomStartUI = TRUE;
+    }
 
     char startui_sb_dll[MAX_PATH];
     ZeroMemory(startui_sb_dll, sizeof(startui_sb_dll));
     GetWindowsDirectoryA(startui_sb_dll, MAX_PATH);
     strcat_s(startui_sb_dll, MAX_PATH, "\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\");
-    strcat_s(startui_sb_dll, MAX_PATH, STARTUI_SB_NAME);
-    strcat_s(startui_sb_dll, MAX_PATH, ".dll");
+    strcat_s(startui_sb_dll, MAX_PATH, bCustomStartUI ? "StartUI_.dll" : STARTUI_SB_NAME ".dll");
 
-    GetWindowsDirectoryW(wszPath, MAX_PATH);
-    wcscat_s(wszPath, MAX_PATH, L"\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\" _T(STARTUI_SB_NAME) L".dll");
+    CHAR szHash[100];
+    ZeroMemory(szHash, sizeof(szHash));
     ComputeFileHash(wszPath, szHash, ARRAYSIZE(szHash));
 
     printf("[Symbols] Downloading symbols for \"%s\" (\"%s\")...\n", startui_sb_dll, szHash);
@@ -326,7 +372,7 @@ static BOOL ProcessStartUISymbols(const char* pszSettingsPath, DWORD* pOffsets)
     if (VnGetSymbols(
         pszSettingsPath,
         pOffsets,
-        startui_SN,
+        (char**)startui_SN,
         STARTUI_SB_CNT
     ))
     {
@@ -335,9 +381,10 @@ static BOOL ProcessStartUISymbols(const char* pszSettingsPath, DWORD* pOffsets)
         return FALSE;
     }
 
-    RegSetValueExW(hKey, TEXT(STARTUI_SB_0), 0, REG_DWORD, &pOffsets[0], sizeof(DWORD));
+    RegSetValueExW(hKey, TEXT(STARTUI_SB_0), 0, REG_DWORD, (const BYTE*)&pOffsets[0], sizeof(DWORD));
 
-    RegSetValueExA(hKey, "Hash", 0, REG_SZ, szHash, strlen(szHash) + 1);
+    RegSetValueExA(hKey, "Hash", 0, REG_SZ, szHash, (DWORD)(strlen(szHash) + 1));
+    SaveVersion(hKey, STARTUI_SB_VERSION);
 
     if (hKey) RegCloseKey(hKey);
     return TRUE;
@@ -349,15 +396,15 @@ DWORD DownloadSymbols(DownloadSymbolsParams* params)
 
     printf("[Symbols] Started \"Download symbols\" thread.\n");
 
+    EP_L10N_ApplyPreferredLanguageForCurrentThread();
+    HMODULE hEPGui = LoadGuiModule();
+
     RTL_OSVERSIONINFOW rovi;
     DWORD32 ubr = VnGetOSVersionAndUBR(&rovi);
-    TCHAR szReportedVersion[MAX_PATH + 1];
-    ZeroMemory(
+    wchar_t szReportedVersion[32];
+    swprintf_s(
         szReportedVersion,
-        sizeof(szReportedVersion)
-    );
-    wsprintf(
-        szReportedVersion,
+        ARRAYSIZE(szReportedVersion),
         L"%d.%d.%d.%d",
         rovi.dwMajorVersion,
         rovi.dwMinorVersion,
@@ -365,23 +412,55 @@ DWORD DownloadSymbols(DownloadSymbolsParams* params)
         ubr
     );
 
-    TCHAR buffer[1000];
-    ZeroMemory(
-        buffer,
-        1000
+    wchar_t title[160];
+    wchar_t body[200];
+    wchar_t titleFormat[160];
+    wchar_t buffer[1000];
+    title[0] = 0; body[0] = 0; titleFormat[0] = 0; buffer[0] = 0;
+
+    // Don't annoy the user with "Downloading symbols" notification if the symbols aren't available in MS' servers
+    HKEY hKey = NULL;
+    DWORD dwDisposition;
+    RegCreateKeyExW(
+        HKEY_CURRENT_USER,
+        TEXT(REGPATH),
+        0,
+        NULL,
+        REG_OPTION_NON_VOLATILE,
+        KEY_READ | KEY_WRITE,
+        NULL,
+        &hKey,
+        &dwDisposition
     );
-    wsprintf(
-        buffer,
-        DownloadSymbolsXML,
-        szReportedVersion
+    wchar_t szLastNotifiedBuild[32];
+    szLastNotifiedBuild[0] = 0;
+    DWORD dwSize = sizeof(szLastNotifiedBuild);
+    RegQueryValueExW(
+        hKey,
+        TEXT("SymbolsLastNotifiedOSBuild"),
+        0,
+        NULL,
+        (LPBYTE)szLastNotifiedBuild,
+        &dwSize
     );
-    if (params->bVerbose)
+
+    BOOL bNewBuild = wcscmp(szLastNotifiedBuild, szReportedVersion) != 0;
+    if (bNewBuild)
     {
+        if (LoadStringW(hEPGui, IDS_SYM_DL_T, titleFormat, ARRAYSIZE(titleFormat)))
+        {
+            swprintf_s(title, ARRAYSIZE(title), titleFormat, szReportedVersion);
+        }
+
+        LoadStringW(hEPGui, IDS_SYM_DL_B, body, ARRAYSIZE(body));
+
+        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/valinet/ExplorerPatcher/wiki/Symbols", L"short", title, body);
+
         HRESULT hr = S_OK;
         __x_ABI_CWindows_CData_CXml_CDom_CIXmlDocument* inputXml = NULL;
         hr = String2IXMLDocument(
             buffer,
-            wcslen(buffer),
+            (DWORD)wcslen(buffer),
             &inputXml,
 #ifdef DEBUG
             stdout
@@ -392,14 +471,26 @@ DWORD DownloadSymbols(DownloadSymbolsParams* params)
         hr = ShowToastMessage(
             inputXml,
             APPID,
-            sizeof(APPID) / sizeof(TCHAR) - 1,
+            sizeof(APPID) / sizeof(wchar_t) - 1,
 #ifdef DEBUG
             stdout
 #else
             NULL
 #endif
         );
+
+        RegSetValueExW(
+            hKey,
+            TEXT("SymbolsLastNotifiedOSBuild"),
+            0,
+            REG_SZ,
+            (const BYTE*)szReportedVersion,
+            (DWORD)(wcslen(szReportedVersion) * sizeof(wchar_t))
+        );
     }
+
+    RegCloseKey(hKey);
+
     wprintf(
         L"[Symbols] "
         L"Attempting to download symbols for OS version %s.\n",
@@ -433,80 +524,91 @@ DWORD DownloadSymbols(DownloadSymbolsParams* params)
 
     symbols_addr symbols_PTRS;
     ZeroMemory(&symbols_PTRS, sizeof(symbols_addr));
-    BOOL bDownloaded = FALSE;
+    BOOL bAnySuccess = FALSE, bAllSuccess = TRUE;
+    if (params->loadResult.bNeedToDownloadExplorerSymbols && IsWindows11Version22H2OrHigher())
+    {
+        BOOL bSuccess = ProcessExplorerSymbols(szSettingsPath, symbols_PTRS.explorer_PTRS);
+        bAnySuccess |= bSuccess;
+        bAllSuccess &= bSuccess;
+    }
     if (params->loadResult.bNeedToDownloadTwinuiPcshellSymbols)
     {
-        bDownloaded |= ProcessTwinuiPcshellSymbols(szSettingsPath, symbols_PTRS.twinui_pcshell_PTRS);
+        BOOL bSuccess = ProcessTwinuiPcshellSymbols(szSettingsPath, symbols_PTRS.twinui_pcshell_PTRS);
+        bAnySuccess |= bSuccess;
+        bAllSuccess &= bSuccess;
     }
     if (params->loadResult.bNeedToDownloadStartDockedSymbols && IsWindows11())
     {
-        bDownloaded |= ProcessStartDockedSymbols(szSettingsPath, symbols_PTRS.startdocked_PTRS);
+        BOOL bSuccess = ProcessStartDockedSymbols(szSettingsPath, symbols_PTRS.startdocked_PTRS);
+        bAnySuccess |= bSuccess;
+        bAllSuccess &= bSuccess;
     }
     if (params->loadResult.bNeedToDownloadStartUISymbols && rovi.dwBuildNumber >= 18362)
     {
-        bDownloaded |= ProcessStartUISymbols(szSettingsPath, symbols_PTRS.startui_PTRS);
+        BOOL bSuccess = ProcessStartUISymbols(szSettingsPath, symbols_PTRS.startui_PTRS);
+        bAnySuccess |= bSuccess;
+        bAllSuccess &= bSuccess;
     }
 
     printf("[Symbols] Finished gathering symbol data.\n");
 
-    if (bDownloaded)
+    title[0] = 0; body[0] = 0;
+    BOOL bNotify = TRUE;
+    if (bAllSuccess)
     {
-        if (params->bVerbose)
+        if (LoadStringW(hEPGui, IDS_SYM_SUCCESS_T, titleFormat, ARRAYSIZE(titleFormat)))
         {
-            __x_ABI_CWindows_CData_CXml_CDom_CIXmlDocument* inputXml = NULL;
-            HRESULT hr = String2IXMLDocument(
-                InstallOK,
-                wcslen(InstallOK),
-                &inputXml,
-#ifdef DEBUG
-                stdout
-#else
-                NULL
-#endif
-            );
-            hr = ShowToastMessage(
-                inputXml,
-                APPID,
-                sizeof(APPID) / sizeof(TCHAR) - 1,
-#ifdef DEBUG
-                stdout
-#else
-                NULL
-#endif
-            );
-            Sleep(4000);
-            exit(0);
+            swprintf_s(title, ARRAYSIZE(title), titleFormat, szReportedVersion);
         }
-        else
-        {
-            wsprintf(
-                buffer,
-                DownloadOKXML,
-                szReportedVersion
-            );
-            __x_ABI_CWindows_CData_CXml_CDom_CIXmlDocument* inputXml2 = NULL;
-            HRESULT hr = String2IXMLDocument(
-                buffer,
-                wcslen(buffer),
-                &inputXml2,
-#ifdef DEBUG
-                stdout
-#else
-                NULL
-#endif
-            );
-            hr = ShowToastMessage(
-                inputXml2,
-                APPID,
-                sizeof(APPID) / sizeof(TCHAR) - 1,
-#ifdef DEBUG
-                stdout
-#else
-                NULL
-#endif
-            );
-        }
+        LoadStringW(hEPGui, IDS_SYM_SUCCESS_B, body, ARRAYSIZE(body));
+        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/valinet/ExplorerPatcher/wiki/Symbols", L"long", title, body);
     }
+    else if (bAnySuccess)
+    {
+        if (LoadStringW(hEPGui, IDS_SYM_FAILEDSOME_T, titleFormat, ARRAYSIZE(titleFormat)))
+        {
+            swprintf_s(title, ARRAYSIZE(title), titleFormat, szReportedVersion);
+        }
+        LoadStringW(hEPGui, IDS_SYM_FAILEDSOME_B, body, ARRAYSIZE(body));
+        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/valinet/ExplorerPatcher/wiki/Symbols", L"short", title, body);
+    }
+    else
+    {
+        if (LoadStringW(hEPGui, IDS_SYM_FAILEDALL_T, titleFormat, ARRAYSIZE(titleFormat)))
+        {
+            swprintf_s(title, ARRAYSIZE(title), titleFormat, szReportedVersion);
+        }
+        LoadStringW(hEPGui, IDS_SYM_FAILEDALL_B, body, ARRAYSIZE(body));
+        swprintf_s(buffer, ARRAYSIZE(buffer), DownloadNotificationXML, L"https://github.com/valinet/ExplorerPatcher/wiki/Symbols", L"short", title, body);
+        bNotify = bNewBuild;
+    }
+
+    if (bNotify)
+    {
+        __x_ABI_CWindows_CData_CXml_CDom_CIXmlDocument* inputXml2 = NULL;
+        HRESULT hr = String2IXMLDocument(
+            buffer,
+            (DWORD)wcslen(buffer),
+            &inputXml2,
+#ifdef DEBUG
+            stdout
+#else
+            NULL
+#endif
+        );
+        hr = ShowToastMessage(
+            inputXml2,
+            APPID,
+            sizeof(APPID) / sizeof(wchar_t) - 1,
+#ifdef DEBUG
+            stdout
+#else
+            NULL
+#endif
+        );
+    }
+
+    FreeLibrary(hEPGui);
 
     printf("[Symbols] Finished \"Download symbols\" thread.\n");
     return 0;
@@ -528,8 +630,63 @@ LoadSymbolsResult LoadSymbols(symbols_addr* symbols_PTRS)
     CHAR szStoredHash[33];
     ZeroMemory(szHash, sizeof(szHash));
     ZeroMemory(szStoredHash, sizeof(szStoredHash));
-    TCHAR wszPath[MAX_PATH];
+    wchar_t wszPath[MAX_PATH];
     BOOL bOffsetsValid;
+
+    // Load explorer.exe offsets
+    if (IsWindows11Version22H2OrHigher())
+    {
+        bOffsetsValid = FALSE;
+        RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            TEXT(REGPATH) L"\\" TEXT(EXPLORER_SB_NAME),
+            0,
+            NULL,
+            REG_OPTION_NON_VOLATILE,
+            KEY_READ,
+            NULL,
+            &hKey,
+            &dwDisposition
+        );
+        if (!hKey || hKey == INVALID_HANDLE_VALUE)
+        {
+            result.bSuccess = FALSE;
+            return result;
+        }
+
+        GetWindowsDirectoryW(wszPath, MAX_PATH);
+        wcscat_s(wszPath, MAX_PATH, L"\\" TEXT(EXPLORER_SB_NAME) L".exe");
+        if (ComputeFileHash(wszPath, szHash, ARRAYSIZE(szHash)) == ERROR_SUCCESS)
+        {
+            szStoredHash[0] = 0;
+            dwSize = sizeof(szStoredHash);
+            if (RegQueryValueExA(hKey, "Hash", 0, NULL, szStoredHash, &dwSize) == ERROR_SUCCESS
+                && !_stricmp(szHash, szStoredHash) && CheckVersion(hKey, EXPLORER_SB_VERSION))
+            {
+                dwSize = sizeof(DWORD);
+                RegQueryValueExW(hKey, TEXT(EXPLORER_SB_0), 0, NULL, (LPBYTE)&symbols_PTRS->explorer_PTRS[0], &dwSize);
+                RegQueryValueExW(hKey, TEXT(EXPLORER_SB_1), 0, NULL, (LPBYTE)&symbols_PTRS->explorer_PTRS[1], &dwSize);
+                RegQueryValueExW(hKey, TEXT(EXPLORER_SB_2), 0, NULL, (LPBYTE)&symbols_PTRS->explorer_PTRS[2], &dwSize);
+                RegQueryValueExW(hKey, TEXT(EXPLORER_SB_3), 0, NULL, (LPBYTE)&symbols_PTRS->explorer_PTRS[3], &dwSize);
+                RegQueryValueExW(hKey, TEXT(EXPLORER_SB_4), 0, NULL, (LPBYTE)&symbols_PTRS->explorer_PTRS[4], &dwSize);
+                RegQueryValueExW(hKey, TEXT(EXPLORER_SB_5), 0, NULL, (LPBYTE)&symbols_PTRS->explorer_PTRS[5], &dwSize);
+                bOffsetsValid = TRUE;
+            }
+            else
+            {
+                printf("[Symbols] Symbols for \"%s\" are not available.\n", EXPLORER_SB_NAME);
+                result.bNeedToDownloadExplorerSymbols = TRUE;
+            }
+        }
+        if (hKey) RegCloseKey(hKey);
+        if (!bOffsetsValid)
+        {
+            RegDeleteTreeW(
+                HKEY_CURRENT_USER,
+                TEXT(REGPATH) L"\\" TEXT(EXPLORER_SB_NAME)
+            );
+        }
+    }
 
     // Load twinui.pcshell.dll offsets
     bOffsetsValid = FALSE;
@@ -556,29 +713,25 @@ LoadSymbolsResult LoadSymbols(symbols_addr* symbols_PTRS)
     {
         szStoredHash[0] = 0;
         dwSize = sizeof(szStoredHash);
-        RegQueryValueExA(hKey, "Hash", 0, NULL, szStoredHash, &dwSize);
-
-        if (!_stricmp(szHash, szStoredHash))
+        if (RegQueryValueExA(hKey, "Hash", 0, NULL, szStoredHash, &dwSize) == ERROR_SUCCESS
+            && !_stricmp(szHash, szStoredHash) && CheckVersion(hKey, TWINUI_PCSHELL_SB_VERSION))
         {
             dwSize = sizeof(DWORD);
-            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_0), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[0], &dwSize);
-            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_1), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[1], &dwSize);
-            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_2), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[2], &dwSize);
-            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_3), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[3], &dwSize);
-            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_4), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[4], &dwSize);
-            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_5), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[5], &dwSize);
-            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_6), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[6], &dwSize);
-            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_7), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[7], &dwSize);
-            if (IsWindows11Version22H2OrHigher())
-            {
-                RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_LAST), 0, NULL, &symbols_PTRS->twinui_pcshell_PTRS[TWINUI_PCSHELL_SB_CNT - 1], &dwSize);
-            }
+            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_0), 0, NULL, (LPBYTE)&symbols_PTRS->twinui_pcshell_PTRS[0], &dwSize);
+            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_1), 0, NULL, (LPBYTE)&symbols_PTRS->twinui_pcshell_PTRS[1], &dwSize);
+            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_2), 0, NULL, (LPBYTE)&symbols_PTRS->twinui_pcshell_PTRS[2], &dwSize);
+            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_3), 0, NULL, (LPBYTE)&symbols_PTRS->twinui_pcshell_PTRS[3], &dwSize);
+            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_4), 0, NULL, (LPBYTE)&symbols_PTRS->twinui_pcshell_PTRS[4], &dwSize);
+            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_5), 0, NULL, (LPBYTE)&symbols_PTRS->twinui_pcshell_PTRS[5], &dwSize);
+            RegQueryValueExW(hKey, TEXT(TWINUI_PCSHELL_SB_6), 0, NULL, (LPBYTE)&symbols_PTRS->twinui_pcshell_PTRS[6], &dwSize);
             bOffsetsValid = TRUE;
         }
         else
         {
             printf("[Symbols] Symbols for \"%s\" are not available.\n", TWINUI_PCSHELL_SB_NAME);
+#ifdef _M_X64 // TODO Add support for ARM64
             result.bNeedToDownloadTwinuiPcshellSymbols = TRUE;
+#endif
         }
     }
 
@@ -613,16 +766,15 @@ LoadSymbolsResult LoadSymbols(symbols_addr* symbols_PTRS)
         {
             szStoredHash[0] = 0;
             dwSize = sizeof(szStoredHash);
-            RegQueryValueExA(hKey, "Hash", 0, NULL, szStoredHash, &dwSize);
-
-            if (!_stricmp(szHash, szStoredHash))
+            if (RegQueryValueExA(hKey, "Hash", 0, NULL, szStoredHash, &dwSize) == ERROR_SUCCESS
+                && !_stricmp(szHash, szStoredHash) && CheckVersion(hKey, STARTDOCKED_SB_VERSION))
             {
                 dwSize = sizeof(DWORD);
-                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_0), 0, NULL, &symbols_PTRS->startdocked_PTRS[0], &dwSize);
-                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_1), 0, NULL, &symbols_PTRS->startdocked_PTRS[1], &dwSize);
-                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_2), 0, NULL, &symbols_PTRS->startdocked_PTRS[2], &dwSize);
-                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_3), 0, NULL, &symbols_PTRS->startdocked_PTRS[3], &dwSize);
-                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_4), 0, NULL, &symbols_PTRS->startdocked_PTRS[4], &dwSize);
+                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_0), 0, NULL, (LPBYTE)&symbols_PTRS->startdocked_PTRS[0], &dwSize);
+                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_1), 0, NULL, (LPBYTE)&symbols_PTRS->startdocked_PTRS[1], &dwSize);
+                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_2), 0, NULL, (LPBYTE)&symbols_PTRS->startdocked_PTRS[2], &dwSize);
+                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_3), 0, NULL, (LPBYTE)&symbols_PTRS->startdocked_PTRS[3], &dwSize);
+                RegQueryValueExW(hKey, TEXT(STARTDOCKED_SB_4), 0, NULL, (LPBYTE)&symbols_PTRS->startdocked_PTRS[4], &dwSize);
                 bOffsetsValid = TRUE;
             }
             else
@@ -659,16 +811,20 @@ LoadSymbolsResult LoadSymbols(symbols_addr* symbols_PTRS)
 
         GetWindowsDirectoryW(wszPath, MAX_PATH);
         wcscat_s(wszPath, MAX_PATH, L"\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\" TEXT(STARTUI_SB_NAME) L".dll");
+        if (!FileExistsW(wszPath))
+        {
+            GetWindowsDirectoryW(wszPath, MAX_PATH);
+            wcscat_s(wszPath, MAX_PATH, L"\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\StartUI_.dll");
+        }
         if (ComputeFileHash(wszPath, szHash, ARRAYSIZE(szHash)) == ERROR_SUCCESS)
         {
             szStoredHash[0] = 0;
             dwSize = sizeof(szStoredHash);
-            RegQueryValueExA(hKey, "Hash", 0, NULL, szStoredHash, &dwSize);
-
-            if (!_stricmp(szHash, szStoredHash))
+            if (RegQueryValueExA(hKey, "Hash", 0, NULL, szStoredHash, &dwSize) == ERROR_SUCCESS
+                && !_stricmp(szHash, szStoredHash) && CheckVersion(hKey, STARTUI_SB_VERSION))
             {
                 dwSize = sizeof(DWORD);
-                RegQueryValueExW(hKey, TEXT(STARTUI_SB_0), 0, NULL, &symbols_PTRS->startui_PTRS[0], &dwSize);
+                RegQueryValueExW(hKey, TEXT(STARTUI_SB_0), 0, NULL, (LPBYTE)&symbols_PTRS->startui_PTRS[0], &dwSize);
                 bOffsetsValid = TRUE;
             }
             else

@@ -60,9 +60,6 @@
     <ClInclude Include="utility.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GUI.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="TaskbarCenter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -132,6 +129,33 @@
     <ClInclude Include="osutility.h">
       <Filter>Header Files\internal</Filter>
     </ClInclude>
+    <ClInclude Include="ImmersiveColor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="InputSwitch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Localization.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="inc\ContainerPolicies.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="inc\memsafe.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="inc\NativeString.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="inc\RefCountedObject.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="inc\ResultUtils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="inc\SimpleArray.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ExplorerPatcher.rc">
@@ -143,9 +167,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ArchiveMenu.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="StartupSound.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SettingsMonitor.c">
@@ -164,12 +185,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="utility.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="GUI.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="TaskbarCenter.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="fmemopen.c">
@@ -202,9 +217,6 @@
     <ClCompile Include="..\libs\sws\SimpleWindowSwitcher\sws_window.c">
       <Filter>Source Files\sws</Filter>
     </ClCompile>
-    <ClCompile Include="updates.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ImmersiveFlyouts.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -217,14 +229,32 @@
     <ClCompile Include="lvt.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="InputSwitch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Localization.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="StartupSound.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Taskbar10.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TaskbarCenter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TwinUIPatches.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="updates.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="settings.reg">
-      <Filter>Settings</Filter>
-    </None>
-    <None Include="settings10.reg">
-      <Filter>Settings</Filter>
-    </None>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
   </ItemGroup>
 </Project>

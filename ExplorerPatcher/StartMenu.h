@@ -6,8 +6,6 @@
 #include <Shlwapi.h>
 #pragma comment(lib, "Shlwapi.lib")
 #include <TlHelp32.h>
-#include <Psapi.h>
-#pragma comment(lib, "Psapi.lib")
 #include <roapi.h>
 #include <winstring.h>
 #include "utility.h"
@@ -40,6 +38,12 @@ DEFINE_GUID(IID_IImmersiveLauncher10RS,
     0xd8d60399,
     0xa0f1, 0xf987, 0x55, 0x51,
     0x32, 0x1f, 0xd1, 0xb4, 0x98, 0x64
+);
+
+DEFINE_GUID(IID_WindowsUdk_UI_Shell_ITaskbarSettings3,
+    0x7153B486,
+    0x6827, 0x58DC, 0xB8, 0x73,
+    0xF9, 0xB3, 0x8C, 0x15, 0x5C, 0xF2
 );
 
 DEFINE_GUID(IID_WindowsUdk_UI_Shell_ITaskbarSettings6,
@@ -179,42 +183,6 @@ interface IImmersiveLauncher10RS
     CONST_VTBL struct IImmersiveLauncher10RSVtbl* lpVtbl;
 };
 
-DEFINE_GUID(IID_ILauncherTipContextMenu,
-    0xb8c1db5f,
-    0xcbb3, 0x48bc, 0xaf, 0xd9,
-    0xce, 0x6b, 0x88, 0x0c, 0x79, 0xed
-);
-
-typedef interface ILauncherTipContextMenu ILauncherTipContextMenu;
-
-typedef struct ILauncherTipContextMenuVtbl
-{
-    BEGIN_INTERFACE
-
-        HRESULT(STDMETHODCALLTYPE* QueryInterface)(
-            ILauncherTipContextMenu* This,
-            /* [in] */ REFIID riid,
-            /* [annotation][iid_is][out] */
-            _COM_Outptr_  void** ppvObject);
-
-    ULONG(STDMETHODCALLTYPE* AddRef)(
-        ILauncherTipContextMenu* This);
-
-    ULONG(STDMETHODCALLTYPE* Release)(
-        ILauncherTipContextMenu* This);
-
-    HRESULT(STDMETHODCALLTYPE* ShowLauncherTipContextMenu)(
-        ILauncherTipContextMenu* This,
-        /* [in] */ POINT* pt);
-
-    END_INTERFACE
-} ILauncherTipContextMenuVtbl;
-
-interface ILauncherTipContextMenu
-{
-    CONST_VTBL struct ILauncherTipContextMenuVtbl* lpVtbl;
-};
-
 void OpenStartOnMonitor(HMONITOR monitor);
 
 // Slightly tweaked version of function available in Open Shell 
@@ -291,9 +259,16 @@ interface WindowsUdk_UI_Shell_TaskbarLayoutStatics // : IInspectable
 };
 
 DEFINE_GUID(IID_WindowsUdk_UI_Shell_ITaskbarLayoutManager,
-    0x4FB10D7C4,
+    0xFB10D7C4,
     0x4F7F, 0x5DE5, 0xA5, 0x28,
-    0x7e, 0xfe, 0xf4, 0x18, 0xaa, 0x48
+    0x7E, 0xFE, 0xF4, 0x18, 0xAA, 0x48
+);
+
+// Used in 23545+ (or maybe couple lower builds too). Still named ITaskbarLayoutManager but has different ReportMonitorAdded signature.
+DEFINE_GUID(IID_WindowsUdk_UI_Shell_ITaskbarLayoutManager2,
+    0x98F82ED2,
+    0x4791, 0x58A0, 0x8D, 0x2F,
+    0xDA, 0xBD, 0x7A, 0x2F, 0x18, 0x9F
 );
 
 typedef struct WindowsUdk_UI_Shell_TaskbarLayoutManagerVtbl // : IInspectableVtbl
@@ -325,29 +300,39 @@ typedef struct WindowsUdk_UI_Shell_TaskbarLayoutManagerVtbl // : IInspectableVtb
         __RPC__in WindowsUdk_UI_Shell_TaskbarLayoutManager* This,
         /* [out] */ __RPC__out TrustLevel* trustLevel);
 
-    HRESULT(STDMETHODCALLTYPE* ReportMonitorAdded)(
-        __RPC__in WindowsUdk_UI_Shell_TaskbarLayoutManager* This,
-        __RPC__in HMONITOR hMonitor,
-        __RPC__in void* _instance_of_winrt_WindowsUdk_UI_Shell_ITaskbarSettings,
-        __RPC__in LPRECT _unknown_lpGeometry);
+    union
+    {
+        HRESULT(STDMETHODCALLTYPE* ReportMonitorAdded)(
+            __RPC__in WindowsUdk_UI_Shell_TaskbarLayoutManager* This,
+            __RPC__in unsigned __int64 hMonitor,
+            __RPC__in void* _instance_of_winrt_WindowsUdk_UI_Shell_ITaskbarSettings,
+            __RPC__in void* _unknown_shellViewToRectMap);
+
+        HRESULT(STDMETHODCALLTYPE* ReportMonitorAdded2)(
+            __RPC__in WindowsUdk_UI_Shell_TaskbarLayoutManager* This,
+            __RPC__in unsigned __int64 hMonitor,
+            __RPC__in void* _instance_of_winrt_WindowsUdk_UI_Shell_ITaskbarSettings,
+            __RPC__in void* _unknown_shellViewToRectMap,
+            /* [out] */ __RPC__out unsigned __int64* result);
+    };
 
     HRESULT(STDMETHODCALLTYPE* ReportMonitorRemoved)(
         __RPC__in WindowsUdk_UI_Shell_TaskbarLayoutManager* This,
-        __RPC__in HMONITOR hMonitor);
+        __RPC__in unsigned __int64 hMonitor);
 
     HRESULT(STDMETHODCALLTYPE* ReportMonitorChanged)(
         __RPC__in WindowsUdk_UI_Shell_TaskbarLayoutManager* This,
-        __RPC__in HMONITOR hMonitor,
+        __RPC__in unsigned __int64 hMonitor,
         __RPC__in LPRECT _unknown_lpGeometry);
 
     HRESULT(STDMETHODCALLTYPE* ReportSettingsForMonitor)(
         __RPC__in WindowsUdk_UI_Shell_TaskbarLayoutManager* This,
-        __RPC__in HMONITOR hMonitor,
+        __RPC__in unsigned __int64 hMonitor,
         __RPC__in void* _instance_of_winrt_WindowsUdk_UI_Shell_ITaskbarSettings);
 
     HRESULT(STDMETHODCALLTYPE* ReportShellViewButtonBounds)(
         __RPC__in WindowsUdk_UI_Shell_TaskbarLayoutManager* This,
-        __RPC__in HMONITOR hMonitor,
+        __RPC__in unsigned __int64 hMonitor,
         __RPC__in void* _instanceof_winrt_WindowsUdk_UI_Shell_Bamo_ShellViewButtonBounds);
 
     END_INTERFACE
@@ -358,12 +343,19 @@ interface WindowsUdk_UI_Shell_TaskbarLayoutManager // : IInspectable
     CONST_VTBL struct WindowsUdk_UI_Shell_TaskbarLayoutManagerVtbl* lpVtbl;
 };
 
+typedef struct _MonitorListEntry
+{
+    HMONITOR hMonitor;
+    unsigned __int64 token;
+} MonitorListEntry;
+
 typedef struct _StartMenuPositioningData
 {
     DWORD location;
     DWORD operation;
     DWORD* pMonitorCount;
-    HMONITOR* pMonitorList;
+    MonitorListEntry* pMonitorList;
+    DWORD i;
 } StartMenuPositioningData;
 
 #define STARTMENU_POSITIONING_OPERATION_ADD 0

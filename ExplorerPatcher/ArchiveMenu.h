@@ -4,6 +4,10 @@
 #include <Windows.h>
 #include <Shlobj_core.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define OPEN_NAME L"&Open archive"
 #define EXTRACT_NAME L"&Extract to \"%s\\\""
 #define OPEN_CMD L"\"C:\\Program Files\\7-Zip\\7zFM.exe\" %s"
@@ -26,7 +30,7 @@ typedef struct _ArchiveMenuThreadParams
 	WNDPROC wndProc;
     HWND(WINAPI* CreateWindowInBand)(
         _In_ DWORD dwExStyle,
-        _In_opt_ ATOM atom,
+        _In_opt_ LPCWSTR lpClassName,
         _In_opt_ LPCWSTR lpWindowName,
         _In_ DWORD dwStyle,
         _In_ int X,
@@ -47,18 +51,12 @@ LRESULT CALLBACK ArchiveMenuWndProc(
     _In_ UINT   uMsg,
     _In_ WPARAM wParam,
     _In_ LPARAM lParam,
-    INT64(*ImmersiveContextMenuHelper_ApplyOwnerDrawToMenuFunc)(
-        HMENU h1,
-        HMENU h2,
-        HWND a3,
-        unsigned int a4,
-        void* data
-        ),
-    void(*ImmersiveContextMenuHelper_RemoveOwnerDrawFromMenuFunc)(
-        HMENU _this,
-        HMENU hWnd,
-        HWND a3
-        )
+    HRESULT(*ImmersiveContextMenuHelper_ApplyOwnerDrawToMenuFunc)(HMENU hMenu, HWND hWnd, POINT* pPt, unsigned int options, void* data),
+    void(*ImmersiveContextMenuHelper_RemoveOwnerDrawFromMenuFunc)(HMENU hMenu, HWND hWnd)
 );
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
