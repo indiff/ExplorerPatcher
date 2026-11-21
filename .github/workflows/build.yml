@@ -215,11 +215,11 @@ jobs:
 
       - name: Create/update release (forks)
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
-        if: github.repository_owner != 'indiff' && github.event_name == 'push' && github.ref_type == 'tag'
+        # if: github.repository_owner != 'indiff' && github.event_name == 'push' && github.ref_type == 'tag'
         id: create_release_fork
         with:
           draft: false
-          prerelease: ${{ !startsWith(github.event.head_commit.message, 'rel_') }}
+          # prerelease: ${{ !startsWith(github.event.head_commit.message, 'rel_') }}
           name: ${{ steps.release_name.outputs.data }}
           tag_name: ${{ github.ref_name }}
           body: ${{ steps.release_description.outputs.data }}
