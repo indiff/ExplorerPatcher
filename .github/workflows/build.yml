@@ -213,6 +213,17 @@ jobs:
             build/Release/ep_setup_arm64.exe
           token: ${{ secrets.PAT }}
 
+      - name: Get Beijing Timestamp (pwsh)
+        id: get_cn_time
+        shell: pwsh
+        run: |
+          $tz = [System.TimeZoneInfo]::FindSystemTimeZoneById("China Standard Time")
+          $nowUtc = [DateTime]::UtcNow
+          $bjTime = [System.TimeZoneInfo]::ConvertTime($nowUtc, $tz)
+          $tagTs = $bjTime.ToString("yyyyMMdd_HHmmss")
+          "tag_ts=$tagTs" | Out-File $env:GITHUB_OUTPUT -Append
+
+
       - name: Create/update release (forks)
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         # if: github.repository_owner != 'indiff' && github.event_name == 'push' && github.ref_type == 'tag'
@@ -221,9 +232,13 @@ jobs:
           draft: false
           # prerelease: ${{ !startsWith(github.event.head_commit.message, 'rel_') }}
           name: ${{ steps.release_name.outputs.data }}
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.get_cn_time.outputs.tag_ts }}
           body: ${{ steps.release_description.outputs.data }}
           files: |
+            x64/ep_setup.exe
+            ARM64/ep_setup.exe
+            build/Release/x64/ep_setup.exe
+            build/Release/ARM64/ep_setup.exe
             build/Release/ep_setup.exe
             build/Release/ep_setup_arm64.exe
           token: ${{ secrets.GITHUB_TOKEN }}
